@@ -3,7 +3,6 @@ package service
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -56,9 +55,6 @@ func (lsm *LocalServiceManager) saveState() error {
 }
 
 func (lsm *LocalServiceManager) run(service Service) (int, error) {
-	if service.Command == nil {
-		return 0, fmt.Errorf("empty service command")
-	}
 	cmdName := getCommand(service)
 	os.Chmod(cmdName, 0777)
 
@@ -162,6 +158,10 @@ func (lsm *LocalServiceManager) Uninstall(name string) error {
 	}
 
 	return lsm.saveState()
+}
+
+func (lsm *LocalServiceManager) List() ([]string, error) {
+	panic("not implemented")
 }
 
 func (lsm *LocalServiceManager) Start() error {

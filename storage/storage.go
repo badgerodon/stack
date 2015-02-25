@@ -3,22 +3,29 @@ package storage
 import (
 	"fmt"
 	"io"
-	"net/url"
 	"os"
-	"strings"
 )
 
 type (
 	Provider interface {
-		Delete(rawurl string) error
-		Get(rawurl string) (io.ReadCloser, error)
-		Put(rawurl string, rdr io.Reader) error
-		List(rawurl string) ([]string, error)
-		Version(rawurl string) (string, error)
+		Delete(location Location) error
+		Get(location Location) (io.ReadCloser, error)
+		Put(location Location, rdr io.Reader) error
+		List(location Location) ([]string, error)
+		Version(location Location, previous string) (string, error)
 	}
 	Sizer interface {
 		Size() (int64, error)
 	}
+)
+
+var providers = map[string]Provider{}
+
+func Register(scheme string, provider Provider) {
+	providers[scheme] = provider
+}
+
+type (
 	DeleteOnClose struct {
 		*os.File
 	}
@@ -36,52 +43,42 @@ func getSize(rdr io.Reader) (int64, error) {
 	return 0, fmt.Errorf("could not find size implementation")
 }
 
-func GetProvider(rawurl string) (Provider, error) {
-	if !strings.Contains(rawurl, "://") {
-		return Local, nil
+func GetProvider(loc Location) (Provider, error) {
+	p, ok := providers[loc.Type()]
+	if ok {
+		return p, nil
 	}
-	u, err := url.Parse(rawurl)
-	if err != nil {
-		return nil, err
-	}
-	switch u.Scheme {
-	case "mega":
-		return Mega, nil
-	case "file":
-		return Local, nil
-	default:
-		return nil, fmt.Errorf("unknown storage provider: %v", u.Scheme)
-	}
+	return nil, fmt.Errorf("unknown storage provider: %v", loc.Type())
 }
 
-func Delete(rawurl string) error {
-	p, err := GetProvider(rawurl)
+func Delete(loc Location) error {
+	p, err := GetProvider(loc)
 	if err != nil {
 		return err
 	}
-	return p.Delete(rawurl)
+	return p.Delete(loc)
 }
 
-func Get(rawurl string) (io.ReadCloser, error) {
-	p, err := GetProvider(rawurl)
+func Get(loc Location) (io.ReadCloser, error) {
+	p, err := GetProvider(loc)
 	if err != nil {
 		return nil, err
 	}
-	return p.Get(rawurl)
+	return p.Get(loc)
 }
 
-func List(rawurl string) ([]string, error) {
-	p, err := GetProvider(rawurl)
+func List(loc Location) ([]string, error) {
+	p, err := GetProvider(loc)
 	if err != nil {
 		return nil, err
 	}
-	return p.List(rawurl)
+	return p.List(loc)
 }
 
-func Put(rawurl string, rdr io.Reader) error {
-	p, err := GetProvider(rawurl)
+func Put(loc Location, rdr io.Reader) error {
+	p, err := GetProvider(loc)
 	if err != nil {
 		return err
 	}
-	return p.Put(rawurl, rdr)
+	return p.Put(loc, rdr)
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -9,6 +10,53 @@ import (
 	"github.com/badgerodon/stack/storage"
 	"github.com/codegangsta/cli"
 )
+
+func cp(src, dst string) error {
+	if strings.HasSuffix(dst, "/") && !strings.HasSuffix(src, "/") {
+		n := src
+		if strings.Contains(n, "/") {
+			n = n[strings.LastIndex(n, "/")+1:]
+		}
+		dst = filepath.Join(dst, n)
+	}
+
+	snl, err := storage.ParseLocation(src)
+	if err != nil {
+		return err
+	}
+
+	dnl, err := storage.ParseLocation(dst)
+	if err != nil {
+		return err
+	}
+
+	source, err := storage.Get(snl)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	err = storage.Put(dnl, source)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func ls(dir string) error {
+	loc, err := storage.ParseLocation(dir)
+	if err != nil {
+		return err
+	}
+	names, err := storage.List(loc)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		fmt.Println(name)
+	}
+	return nil
+}
 
 func main() {
 	log.SetFlags(0)
@@ -24,23 +72,7 @@ func main() {
 					log.Fatalln("source and destination arguments are required")
 				}
 
-				sn, dn := c.Args()[0], c.Args()[1]
-
-				if strings.HasSuffix(dn, "/") && !strings.HasSuffix(sn, "/") {
-					n := sn
-					if strings.Contains(n, "/") {
-						n = n[strings.LastIndex(n, "/")+1:]
-					}
-					dn = filepath.Join(dn, n)
-				}
-
-				source, err := storage.Get(sn)
-				if err != nil {
-					log.Fatalln(err)
-				}
-				defer source.Close()
-
-				err = storage.Put(dn, source)
+				err := cp(c.Args()[0], c.Args()[1])
 				if err != nil {
 					log.Fatalln(err)
 				}
@@ -50,12 +82,29 @@ func main() {
 			Name:  "ls",
 			Usage: "list a directory",
 			Action: func(c *cli.Context) {
-				names, err := storage.List(c.Args().First())
+				err := ls(c.Args().First())
 				if err != nil {
 					log.Fatalln(err)
 				}
-				for _, name := range names {
-					log.Println(name)
+			},
+		},
+		{
+			Name:  "install",
+			Usage: "install the stack service",
+			Action: func(c *cli.Context) {
+				err := install(c.Args().First())
+				if err != nil {
+					log.Fatalln(err)
+				}
+			},
+		},
+		{
+			Name:  "watch",
+			Usage: "watch a config file",
+			Action: func(c *cli.Context) {
+				err := watch(c.Args().First())
+				if err != nil {
+					log.Fatalln(err)
 				}
 			},
 		},

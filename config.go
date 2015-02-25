@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/badgerodon/stack/service"
-	"github.com/badgerodon/stack/sync"
+	"github.com/badgerodon/stack/storage"
 )
 
 var rootDir, tmpDir string
@@ -25,17 +25,17 @@ func init() {
 	case "linux":
 		if isRoot {
 			rootDir = "/opt/badgerodon-stack"
+			serviceManager = service.NewSystemDServiceManager("/usr/lib/systemd/system/", false)
+		} else {
+			rootDir = filepath.Join(os.Getenv("HOME"), "badgerodon-stack")
 			dir := ""
 			if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 				dir = filepath.Join(xdg, "systemd", "user")
 			} else {
 				dir = filepath.Join(os.Getenv("HOME"), ".config", "systemd", "user")
 			}
-			os.MkdirAll(dir, 0644)
-			serviceManager = service.NewSystemDServiceManager(dir)
-		} else {
-			rootDir = filepath.Join(os.Getenv("HOME"), "badgerodon-stack")
-			serviceManager = service.NewSystemDServiceManager("/usr/lib/systemd/system/")
+			os.MkdirAll(dir, 0755)
+			serviceManager = service.NewSystemDServiceManager(dir, true)
 		}
 	case "windows":
 		// TODO: check for access
@@ -58,7 +58,7 @@ type (
 	}
 	Application struct {
 		Name    string             `yaml:"name"`
-		Source  sync.Source        `yaml:"source"`
+		Source  storage.Location   `yaml:"source"`
 		Links   map[string]string  `yaml:"links,omitempty"`
 		Files   map[string]string  `yaml:"files,omitempty"`
 		Service ApplicationService `yaml:"service,omitempty"`
@@ -97,7 +97,10 @@ func ReadConfig() *Config {
 	cfg := &Config{}
 	bs, err := ioutil.ReadFile(filepath.Join(rootDir, "config.yaml"))
 	if err == nil {
-		yaml.Unmarshal(bs, cfg)
+		err = yaml.Unmarshal(bs, cfg)
+		if err != nil {
+			log.Println("[ReadConfig] error unmarshaling:", err)
+		}
 	}
 
 	if cfg.Applications == nil {
@@ -112,6 +115,7 @@ func ReadConfig() *Config {
 func SaveConfig(cfg *Config) {
 	out, err := yaml.Marshal(cfg)
 	if err != nil {
+		log.Println("[SaveConfig] error marshaling:", err)
 		return
 	}
 	ioutil.WriteFile(filepath.Join(rootDir, "config.yaml"), out, 0755)
@@ -163,12 +167,23 @@ func Validate(cfg *Config) {
 		existingApplications[p] = struct{}{}
 		return filepath.SkipDir
 	})
+	// services
+	existingServices := map[string]struct{}{}
+	services, err := serviceManager.List()
+	if err != nil {
+		log.Println("[config] error listing services:", err)
+	} else {
+		for _, svc := range services {
+			existingServices[svc] = struct{}{}
+		}
+	}
 
 	for i := 0; i < len(cfg.Applications); i++ {
 		a := cfg.Applications[i]
 		_, foundDownload := existingDownloads[a.DownloadPath()]
 		_, foundApplication := existingApplications[a.ApplicationPath()]
-		if foundDownload && foundApplication {
+		_, foundService := existingServices[a.ServiceName()]
+		if foundDownload && foundApplication && foundService {
 			delete(existingDownloads, a.DownloadPath())
 			delete(existingApplications, a.ApplicationPath())
 		} else {

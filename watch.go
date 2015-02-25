@@ -2,48 +2,42 @@ package main
 
 import (
 	"log"
-	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/badgerodon/stack/storage"
 	"github.com/badgerodon/stack/sync"
+	"github.com/cenkalti/backoff"
 )
 
-func Watch(endpoint string) {
-	serviceManager.Start()
-
-	syncer, err := sync.Parse(endpoint)
+func watch(src string) error {
+	loc, err := storage.ParseLocation(src)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	watcher := syncer.Watch()
-	for range watcher.C {
-		log.Printf("[watch] detected change\n")
-		nm := filepath.Join(os.TempDir(), "badgerodon-stack-config.yaml")
-		err := syncer.Sync(nm)
-		if err != nil {
-			log.Printf("[watch] error syncing: %v\n", err)
-			time.Sleep(time.Minute)
-			continue
-		}
-		f, err := os.Open(nm)
-		if err != nil {
-			log.Printf("[watch] error opening config: %v\n", err)
-			time.Sleep(time.Minute)
-			continue
-		}
-		cfg, err := ParseConfig(f)
-		f.Close()
-		if err != nil {
-			log.Printf("[watch] error parsing config: %v\n", err)
-			time.Sleep(time.Minute)
-			continue
-		}
-		err = install(cfg)
-		if err != nil {
-			log.Printf("[watch] error installing: %v\n", err)
-			continue
-		}
+	watcher, err := sync.Watch(loc)
+	if err != nil {
+		return err
 	}
+	defer watcher.Stop()
+
+	// TODO: a better approach here would be to use a channel to retry on,
+	//       then if you jacked up the config, it would pick up the change
+	//       in the middle of all the retries. As it stands now it would take a
+	//       minute to fix itself.
+	eb := backoff.NewExponentialBackOff()
+	eb.MaxElapsedTime = time.Minute
+
+	for range watcher.C {
+		log.Println("[watch] new version")
+		backoff.Retry(func() error {
+			err := install(src)
+			if err != nil {
+				log.Printf("[watch] error installing: %v\n", err)
+			}
+			return err
+		}, eb)
+	}
+
+	return nil
 }

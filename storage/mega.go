@@ -3,7 +3,7 @@ package storage
 import (
 	"fmt"
 	"io"
-	"net/url"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -65,36 +65,48 @@ func init() {
 			}
 		}
 	}()
+
+	Register("mega", Mega)
 }
 
-func (mp *MegaProvider) parse(rawurl string) megaref {
-	ref := megaref{
-		email:    os.Getenv("MEGA_EMAIL"),
-		password: os.Getenv("MEGA_PASSWORD"),
+func (mp *MegaProvider) parse(loc Location) megaref {
+	ref := megaref{}
+	// email
+	if ref.email == "" {
+		ref.email = loc["username"]
 	}
-	u, err := url.Parse(rawurl)
-	if err == nil {
-		if u.Host != "mega.co.nz" {
-			ref.path = "/" + u.Host + u.Path
-		} else {
-			ref.path = u.Path
-		}
-		if u.User != nil {
-			ref.email = u.User.Username()
-			pw, ok := u.User.Password()
-			if ok {
-				ref.password = pw
-			}
-		}
-	} else {
-		ref.path = rawurl
+	if ref.email == "" {
+		ref.email = loc["email"]
 	}
-	if strings.HasPrefix(ref.path, "/") {
+	if ref.email == "" {
+		ref.email = os.Getenv("MEGA_EMAIL")
+	}
+	// password
+	if ref.password == "" {
+		ref.password = loc["password"]
+	}
+	if ref.password == "" {
+		ref.password = os.Getenv("MEGA_PASSWORD")
+	}
+	// path
+	if ref.path == "" {
+		ref.path = loc["path"]
+	}
+	for strings.HasPrefix(ref.path, "/") {
 		ref.path = ref.path[1:]
 	}
-	if strings.HasSuffix(ref.path, "/") {
+	for strings.HasSuffix(ref.path, "/") {
 		ref.path = ref.path[:len(ref.path)-1]
 	}
+
+	if loc["host"] != "mega.co.nz" {
+		if ref.path == "" {
+			ref.path = loc["host"]
+		} else {
+			ref.path = loc["host"] + "/" + ref.path
+		}
+	}
+
 	return ref
 }
 
@@ -169,8 +181,8 @@ func (mp *MegaProvider) getNode(client *mega.Mega, path string, create bool) (*m
 	return node, nil
 }
 
-func (mp *MegaProvider) Delete(rawurl string) error {
-	ref := mp.parse(rawurl)
+func (mp *MegaProvider) Delete(loc Location) error {
+	ref := mp.parse(loc)
 	client, err := mp.getClient(ref)
 	if err != nil {
 		return err
@@ -185,8 +197,8 @@ func (mp *MegaProvider) Delete(rawurl string) error {
 	return client.Delete(node, true)
 }
 
-func (mp *MegaProvider) Get(rawurl string) (io.ReadCloser, error) {
-	ref := mp.parse(rawurl)
+func (mp *MegaProvider) Get(loc Location) (io.ReadCloser, error) {
+	ref := mp.parse(loc)
 	client, err := mp.getClient(ref)
 	if err != nil {
 		return nil, err
@@ -213,8 +225,8 @@ func (mp *MegaProvider) Get(rawurl string) (io.ReadCloser, error) {
 	return DeleteOnClose{f}, nil
 }
 
-func (mp *MegaProvider) Put(rawurl string, rdr io.Reader) error {
-	ref := mp.parse(rawurl)
+func (mp *MegaProvider) Put(loc Location, rdr io.Reader) error {
+	ref := mp.parse(loc)
 	client, err := mp.getClient(ref)
 	if err != nil {
 		return err
@@ -238,7 +250,7 @@ func (mp *MegaProvider) Put(rawurl string, rdr io.Reader) error {
 		return fmt.Errorf("failed to create temporary file: %v", err)
 	}
 
-	mp.Delete(rawurl)
+	mp.Delete(loc)
 
 	parent, err := mp.getNode(client.Mega, path.Dir(ref.path), true)
 	if err != nil {
@@ -258,8 +270,8 @@ func (mp *MegaProvider) Put(rawurl string, rdr io.Reader) error {
 	return nil
 }
 
-func (mp *MegaProvider) List(rawurl string) ([]string, error) {
-	ref := mp.parse(rawurl)
+func (mp *MegaProvider) List(loc Location) ([]string, error) {
+	ref := mp.parse(loc)
 	client, err := mp.getClient(ref)
 	if err != nil {
 		return nil, err
@@ -283,8 +295,9 @@ func (mp *MegaProvider) List(rawurl string) ([]string, error) {
 	return names, nil
 }
 
-func (mp *MegaProvider) Version(rawurl string) (string, error) {
-	ref := mp.parse(rawurl)
+func (mp *MegaProvider) Version(loc Location, previous string) (string, error) {
+	ref := mp.parse(loc)
+	log.Println(ref)
 	client, err := mp.getClient(ref)
 	if err != nil {
 		return "", err

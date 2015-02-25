@@ -6,9 +6,9 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func extractTar(dst string, rdr io.Reader) error {
@@ -25,8 +25,8 @@ func extractTar(dst string, rdr io.Reader) error {
 		}
 
 		fp := filepath.Join(dst, h.Name)
-		os.MkdirAll(fp, 0755)
 		if h.FileInfo().IsDir() {
+			os.MkdirAll(fp, 0755)
 			continue
 		}
 		os.MkdirAll(filepath.Dir(fp), 0755)
@@ -63,7 +63,7 @@ func extractZip(dst string, rdr *os.File) error {
 	}
 	z, err := zip.NewReader(rdr, fi.Size())
 	if err != nil {
-		return fmt.Errorf("invalid zip file: %v: %v", rdr.Name())
+		return fmt.Errorf("invalid zip file: %v: %v", rdr.Name(), err)
 	}
 
 	for _, zf := range z.File {
@@ -102,40 +102,11 @@ func extract(dst string, src string) error {
 	}
 	defer f.Close()
 
-	switch filepath.Ext(src) {
-	case ".zip":
+	if strings.HasSuffix(src, ".zip") {
 		return extractZip(dst, f)
-	case ".tar.gz":
+	} else if strings.HasSuffix(src, ".tar.gz") {
 		return extractTarGz(dst, f)
-	default:
+	} else {
 		return fmt.Errorf("unknown file extension: %v", filepath.Ext(src))
 	}
-}
-
-func RemoveOldExtractions(prevCfg, newCfg *Config) error {
-	for _, pa := range prevCfg.Applications {
-		found := false
-		if !found {
-			log.Println("[extractions] remove", pa.ApplicationPath())
-			err := os.RemoveAll(pa.ApplicationPath())
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func AddNewExtractions(prevCfg, newCfg *Config) error {
-	for _, na := range newCfg.Applications {
-		found := false
-		if !found {
-			log.Println("[extractions] add", na.ApplicationPath())
-			err := extract(na.ApplicationPath(), na.DownloadPath())
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }

@@ -25,6 +25,12 @@ type (
 	}
 )
 
+var S3 = &S3Provider{}
+
+func init() {
+	//Register("s3", S3)
+}
+
 func (s3p *S3Provider) parse(rawurl string) s3ref {
 	ref := s3ref{path: rawurl, region: aws.USEast}
 	u, err := url.Parse(rawurl)
@@ -39,6 +45,11 @@ func (s3p *S3Provider) parse(rawurl string) s3ref {
 	}
 	fmt.Println(ref)
 	return ref
+}
+
+func (s3p *S3Provider) Delete(rawurl string) error {
+	ref := s3p.parse(rawurl)
+	return s3.New(ref.auth, ref.region).Bucket(ref.bucket).Del(ref.path)
 }
 
 func (s3p *S3Provider) Get(rawurl string) (io.ReadCloser, error) {
@@ -81,4 +92,13 @@ func (s3p *S3Provider) List(rawurl string) ([]string, error) {
 		truncated = res.IsTruncated
 	}
 	return names, nil
+}
+
+func (s3p *S3Provider) Version(rawurl, previous string) (string, error) {
+	ref := s3p.parse(rawurl)
+	resp, err := s3.New(ref.auth, ref.region).Bucket(ref.bucket).Head(ref.path, map[string][]string{})
+	if err != nil {
+		return "", err
+	}
+	return resp.Header.Get("x-amz-version-id"), nil
 }
