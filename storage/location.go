@@ -47,9 +47,11 @@ func ParseLocation(obj interface{}) (Location, error) {
 				return nil, fmt.Errorf("invalid location: %v", err)
 			}
 			loc := Location{
-				"type": u.Scheme,
-				"host": u.Host,
-				"path": u.Path,
+				"scheme": u.Scheme,
+				"type":   u.Scheme,
+				"host":   u.Host,
+				"path":   u.Path,
+				"query":  u.Query().Encode(),
 			}
 			if u.User != nil {
 				loc["user"] = u.User.Username()

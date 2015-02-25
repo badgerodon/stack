@@ -183,7 +183,7 @@ func Validate(cfg *Config) {
 		_, foundDownload := existingDownloads[a.DownloadPath()]
 		_, foundApplication := existingApplications[a.ApplicationPath()]
 		_, foundService := existingServices[a.ServiceName()]
-		if foundDownload && foundApplication && foundService {
+		if foundDownload && foundApplication && (foundService || len(a.Service.Command) == 0) {
 			delete(existingDownloads, a.DownloadPath())
 			delete(existingApplications, a.ApplicationPath())
 		} else {

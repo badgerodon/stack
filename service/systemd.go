@@ -92,7 +92,9 @@ func (sdsm *SystemDServiceManager) List() ([]string, error) {
 				break
 			}
 			n := fs[0]
-			n = n[:strings.Index(n, ".")]
+			if strings.Contains(n, ".") {
+				n = n[:strings.Index(n, ".")]
+			}
 			services = append(services, n)
 		}
 		i++
