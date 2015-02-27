@@ -58,6 +58,14 @@ func ls(dir string) error {
 	return nil
 }
 
+func rm(src string) error {
+	loc, err := storage.ParseLocation(src)
+	if err != nil {
+		return err
+	}
+	return storage.Delete(loc)
+}
+
 func main() {
 	log.SetFlags(0)
 
@@ -83,6 +91,16 @@ func main() {
 			Usage: "list a directory",
 			Action: func(c *cli.Context) {
 				err := ls(c.Args().First())
+				if err != nil {
+					log.Fatalln(err)
+				}
+			},
+		},
+		{
+			Name:  "rm",
+			Usage: "remove a file",
+			Action: func(c *cli.Context) {
+				err := rm(c.Args().First())
 				if err != nil {
 					log.Fatalln(err)
 				}
