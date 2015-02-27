@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/badgerodon/stack/archive"
 	"github.com/badgerodon/stack/service"
 	"github.com/badgerodon/stack/storage"
 )
@@ -83,7 +84,7 @@ func installApplications(prevCfg, newCfg *Config) error {
 			log.Println("[install] [application] skip", na.Name)
 		} else {
 			log.Println("[install] [application] extract folder", na.ApplicationPath())
-			err := extract(na.ApplicationPath(), na.DownloadPath())
+			err := archive.Extract(na.ApplicationPath(), na.DownloadPath())
 			if err != nil {
 				return fmt.Errorf("error extracting folder: %v", err)
 			}
@@ -170,28 +171,3 @@ func installSources(prevCfg, newCfg *Config) error {
 	}
 	return nil
 }
-
-/*
-import "fmt"
-
-func install(cfg *Config) error {
-	pl := NewPortLock(49001)
-	pl.Lock()
-	defer pl.Unlock()
-
-	prevCfg := ReadConfig()
-	defer SaveConfig(cfg)
-
-	err := ProcessSources(prevCfg, cfg)
-	if err != nil {
-		return fmt.Errorf("error processing sources: %v", err)
-	}
-
-	err = ProcessApplications(prevCfg, cfg)
-	if err != nil {
-		return fmt.Errorf("error processing applications: %v", err)
-	}
-
-	return nil
-}
-*/

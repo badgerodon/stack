@@ -2,6 +2,29 @@
 A simple, pull-based deployment tool.
 
 ## Features
+
+### Archive Formats
+- [x] .tar.gz, .tgz
+- [ ] .tar.bz2, .tbz, .tbz2, .tb2
+- [ ] .tar.Z, .taz, .tz
+- [ ] .tar.lz, .tar.lzma, .tlz
+- [ ] .tar.xz, .txz
+- [x] .zip
+
+### Service Runners
+- [x] local
+- FreeBSD
+  - [ ] rc.d
+- Linux
+  - [x] systemd (user)
+  - [x] systemd (root)
+  - [ ] sysv
+  - [ ] upstart
+- OSX
+  - [ ] launchd
+- Windows
+  - [ ] service
+
 ### Storage Providers
 - [ ] Azure
   - `azure://{storage-account}.blob.core.windows.net/{container}/{blob}`
