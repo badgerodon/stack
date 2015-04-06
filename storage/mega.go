@@ -3,7 +3,6 @@ package storage
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -302,7 +301,6 @@ func (mp *MegaProvider) List(loc Location) ([]string, error) {
 
 func (mp *MegaProvider) Version(loc Location, previous string) (string, error) {
 	ref := mp.parse(loc)
-	log.Println(ref)
 	client, err := mp.getClient(ref)
 	if err != nil {
 		return "", err

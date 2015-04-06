@@ -7,8 +7,10 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -18,6 +20,22 @@ import (
 
 var rootDir, tmpDir string
 var serviceManager service.ServiceManager
+
+func isUpstart() bool {
+	bs, err := exec.Command("/sbin/init", "--version").CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(bs), "upstart")
+}
+
+func isSystemD() bool {
+	bs, err := exec.Command("systemctl").CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(bs), ".mount")
+}
 
 func init() {
 	isRoot := os.Getuid() == 0
@@ -32,17 +50,16 @@ func init() {
 	case "linux":
 		if isRoot {
 			rootDir = "/opt/badgerodon-stack"
-			serviceManager = service.NewSystemDServiceManager("/usr/lib/systemd/system/", false)
+			if isUpstart() {
+				serviceManager = service.NewUpstartServiceManager()
+			} else if isSystemD() {
+				serviceManager = service.NewSystemDServiceManager("/usr/lib/systemd/system/", false)
+			} else {
+				serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.state"))
+			}
 		} else {
 			rootDir = filepath.Join(os.Getenv("HOME"), "badgerodon-stack")
-			dir := ""
-			if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-				dir = filepath.Join(xdg, "systemd", "user")
-			} else {
-				dir = filepath.Join(os.Getenv("HOME"), ".config", "systemd", "user")
-			}
-			os.MkdirAll(dir, 0755)
-			serviceManager = service.NewSystemDServiceManager(dir, true)
+			serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.state"))
 		}
 	case "windows":
 		// TODO: check for access
