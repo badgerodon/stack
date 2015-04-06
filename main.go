@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/badgerodon/stack/service/runner"
 	"github.com/badgerodon/stack/storage"
 	"github.com/codegangsta/cli"
 )
@@ -114,6 +115,23 @@ func main() {
 				if err != nil {
 					log.Fatalln(err)
 				}
+			},
+		},
+		{
+			Name:  "service-runner",
+			Usage: "daemon started by `watch` that runs applications",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "address",
+					Usage: "address to connect to",
+				},
+				cli.StringFlag{
+					Name:  "state-file",
+					Usage: "file to store state in",
+				},
+			},
+			Action: func(c *cli.Context) {
+				runner.Run(c.String("address"), c.String("state-file"))
 			},
 		},
 		{

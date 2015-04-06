@@ -22,6 +22,13 @@ var serviceManager service.ServiceManager
 func init() {
 	isRoot := os.Getuid() == 0
 	switch runtime.GOOS {
+	case "darwin":
+		if isRoot {
+			rootDir = "/opt/badgerodon-stack"
+		} else {
+			rootDir = filepath.Join(os.Getenv("HOME"), "badgerodon-stack")
+		}
+		serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.state"))
 	case "linux":
 		if isRoot {
 			rootDir = "/opt/badgerodon-stack"
@@ -40,7 +47,7 @@ func init() {
 	case "windows":
 		// TODO: check for access
 		rootDir = "C:\\ProgramData\\badgerodon-stack"
-		serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.json"))
+		serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.state"))
 	default:
 		panic("unsupported operating system")
 	}

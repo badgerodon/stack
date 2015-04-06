@@ -4,12 +4,13 @@ A simple, pull-based deployment tool.
 ## Features
 
 ### Archive Formats
-- [x] .tar.gz, .tgz
+- [ ] .tar
+- [ ] .tar.gz, .tgz
 - [ ] .tar.bz2, .tbz, .tbz2, .tb2
 - [ ] .tar.Z, .taz, .tz
 - [ ] .tar.lz, .tar.lzma, .tlz
 - [ ] .tar.xz, .txz
-- [x] .zip
+- [ ] .zip
 
 ### Service Runners
 - [x] local

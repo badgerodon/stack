@@ -115,11 +115,3 @@ func (sdsm *SystemDServiceManager) Uninstall(name string) error {
 	exec.Command("systemctl", mode, "daemon-reload").Run()
 	return nil
 }
-
-func (sdsm *SystemDServiceManager) Start() error {
-	return nil
-}
-
-func (sdsm *SystemDServiceManager) Stop() error {
-	return nil
-}

@@ -11,8 +11,8 @@ type PortLock struct {
 	ln       net.Listener
 }
 
-func NewPortLock(port int) PortLock {
-	return PortLock{hostport: net.JoinHostPort("127.0.0.1", strconv.Itoa(port))}
+func NewPortLock(port int) *PortLock {
+	return &PortLock{hostport: net.JoinHostPort("127.0.0.1", strconv.Itoa(port))}
 }
 
 func (p *PortLock) Lock() {

@@ -38,9 +38,12 @@ func (mc megaClient) Close() {
 	}
 }
 
-var Mega = &MegaProvider{
-	clients: make(chan megaClient, 10),
-}
+var (
+	Mega = &MegaProvider{
+		clients: make(chan megaClient, 10),
+	}
+	MegaFileNotFound = fmt.Errorf("mega.co.nz file not found")
+)
 
 func init() {
 	go func() {
@@ -146,7 +149,7 @@ func (mp *MegaProvider) getClient(ref megaref) (megaClient, error) {
 
 	err := toUse.Login(ref.email, ref.password)
 	if err != nil {
-		return toUse, fmt.Errorf("invalid username or password: %v", err)
+		return toUse, fmt.Errorf("mega.co.nz login failure: %v, email=%s", err, ref.email)
 	}
 
 	return toUse, nil
@@ -174,7 +177,7 @@ func (mp *MegaProvider) getNode(client *mega.Mega, path string, create bool) (*m
 					return nil, err
 				}
 			} else {
-				return nil, fmt.Errorf("file not found")
+				return nil, MegaFileNotFound
 			}
 		}
 	}
@@ -279,7 +282,9 @@ func (mp *MegaProvider) List(loc Location) ([]string, error) {
 	defer client.Close()
 
 	node, err := mp.getNode(client.Mega, ref.path, false)
-	if err != nil {
+	if err == MegaFileNotFound {
+		return []string{}, nil
+	} else if err != nil {
 		return nil, err
 	}
 

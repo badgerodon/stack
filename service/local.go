@@ -1,191 +1,102 @@
 package service
 
 import (
-	"bufio"
-	"encoding/json"
-	"log"
+	"net"
+	"net/rpc"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
-	"time"
+
+	"github.com/badgerodon/stack/service/runner"
+	"github.com/kardianos/osext"
 )
 
 type (
-	LocalService struct {
-		Service
-		PID int
-	}
 	LocalServiceManager struct {
-		stateFilePath string
-		state         map[string]LocalService
-		ticker        *time.Ticker
-		mu            sync.Mutex
+		stateFile string
+		client    *rpc.Client
+		mu        sync.Mutex
 	}
 )
 
-var LocalServiceManagerTickerDuration = time.Second * 10
-
-func NewLocalServiceManager(stateFilePath string) *LocalServiceManager {
-	return &LocalServiceManager{
-		stateFilePath: stateFilePath,
-		state:         map[string]LocalService{},
-		ticker:        time.NewTicker(LocalServiceManagerTickerDuration),
+func NewLocalServiceManager(stateFile string) *LocalServiceManager {
+	lsm := &LocalServiceManager{
+		stateFile: stateFile,
 	}
+	return lsm
 }
 
-func (lsm *LocalServiceManager) readState() error {
-	f, err := os.Open(lsm.stateFilePath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+func (lsm *LocalServiceManager) call(serviceMethod string, args interface{}, reply interface{}) error {
+	lsm.mu.Lock()
+	defer lsm.mu.Unlock()
 
-	return json.NewDecoder(f).Decode(&lsm.state)
-}
-
-func (lsm *LocalServiceManager) saveState() error {
-	f, err := os.Create(lsm.stateFilePath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return json.NewEncoder(f).Encode(lsm.state)
-}
-
-func (lsm *LocalServiceManager) run(service Service) (int, error) {
-	cmdName := getCommand(service)
-	os.Chmod(cmdName, 0777)
-
-	cmd := exec.Command(cmdName, service.Command[1:]...)
-	cmd.Dir = service.Directory
-	// can't use a map here because order actually matters... at least in windows anyway
-	cmd.Env = []string{}
-	for _, e := range os.Environ() {
-		k := e[:strings.IndexByte(e, '=')]
-		if _, ok := service.Environment[k]; !ok {
-			cmd.Env = append(cmd.Env, e)
-		}
-	}
-	for k, v := range service.Environment {
-		cmd.Env = append(cmd.Env, k+"="+v)
-	}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Println("[LocalServiceManager]", service.Name, "failed to create stdout pipe", service.Name)
-		return 0, err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		stdout.Close()
-		log.Println("[LocalServiceManager]", service.Name, "failed to create stderr pipe", service.Name)
-		return 0, err
-	}
-
-	go func() {
-		s := bufio.NewScanner(stdout)
-		for s.Scan() {
-			log.Println("["+service.Name+"]", s.Text())
-		}
-	}()
-	go func() {
-		s := bufio.NewScanner(stderr)
-		for s.Scan() {
-			log.Println("["+service.Name+"]", s.Text())
-		}
-	}()
-
-	err = cmd.Start()
-	if err != nil {
-		log.Println("[LocalServiceManager]", service.Name, "failed to start:", err)
-		return 0, err
-	}
-
-	go func() {
-		err := cmd.Wait()
-		log.Println("[LocalServiceManager]", service.Name, "exited:", err)
-	}()
-
-	return cmd.Process.Pid, nil
-}
-
-func (lsm *LocalServiceManager) checkProcesses() error {
-	changed := false
-	for name, ls := range lsm.state {
-		_, err := os.FindProcess(ls.PID)
+	if lsm.client == nil {
+		exe, err := osext.Executable()
 		if err != nil {
-			log.Printf("[LocalServiceManager] %v is dead, restarting\n", name)
-			pid, err := lsm.run(ls.Service)
-			if err == nil {
-				log.Printf("[LocalServiceManager] started %v: %v\n", name, pid)
-				changed = true
-				lsm.state[name] = LocalService{ls.Service, pid}
-			} else {
-				log.Printf("[LocalServiceManager] error starting %v: %v\n", name, err)
-			}
+			return err
 		}
+
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return err
+		}
+		defer listener.Close()
+
+		runner := exec.Command(exe, "service-runner", "--address", listener.Addr().String(), "--state-file", lsm.stateFile)
+		runner.Stdout = os.Stdout
+		runner.Stderr = os.Stderr
+		go func() {
+			runner.Run()
+			lsm.mu.Lock()
+			lsm.client = nil
+			lsm.mu.Unlock()
+		}()
+
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
+		}
+		lsm.client = rpc.NewClient(conn)
 	}
-	if changed {
-		return lsm.saveState()
-	}
-	return nil
+
+	return lsm.client.Call(serviceMethod, args, reply)
 }
 
 func (lsm *LocalServiceManager) Install(service Service) error {
-	log.Printf("[LocalServiceManager] installing %v\n", service.Name)
-
-	lsm.mu.Lock()
-	defer lsm.mu.Unlock()
-
-	lsm.state[service.Name] = LocalService{service, 0}
-	return lsm.checkProcesses()
-}
-
-func (lsm *LocalServiceManager) Uninstall(name string) error {
-	log.Printf("[LocalServiceManager] uninstalling %v\n", name)
-
-	lsm.mu.Lock()
-	defer lsm.mu.Unlock()
-
-	if ls, ok := lsm.state[name]; ok {
-		proc, err := os.FindProcess(ls.PID)
-		if err == nil {
-			proc.Kill()
-		}
-		delete(lsm.state, name)
+	req := runner.InstallRequest{
+		Service: runner.Service{
+			Name:        service.Name,
+			Directory:   service.Directory,
+			Command:     service.Command,
+			Environment: service.Environment,
+		},
 	}
-
-	return lsm.saveState()
-}
-
-func (lsm *LocalServiceManager) List() ([]string, error) {
-	panic("not implemented")
-}
-
-func (lsm *LocalServiceManager) Start() error {
-	lsm.mu.Lock()
-	defer lsm.mu.Unlock()
-
-	lsm.readState()
-	err := lsm.saveState()
+	var res runner.InstallResult
+	err := lsm.call("Runner.Install", &req, &res)
 	if err != nil {
 		return err
 	}
-
-	go func() {
-		for _ = range lsm.ticker.C {
-			lsm.mu.Lock()
-			lsm.checkProcesses()
-			lsm.mu.Unlock()
-		}
-	}()
-
 	return nil
 }
 
-func (lsm *LocalServiceManager) Stop() error {
-	lsm.ticker.Stop()
+func (lsm *LocalServiceManager) Uninstall(name string) error {
+	req := runner.UninstallRequest{
+		Name: name,
+	}
+	var res runner.UninstallResult
+	err := lsm.call("Runner.Uninstall", &req, &res)
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+func (lsm *LocalServiceManager) List() ([]string, error) {
+	req := runner.ListRequest{}
+	var res runner.ListResult
+	err := lsm.call("Runner.List", &req, &res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Names, nil
 }

@@ -12,7 +12,5 @@ type (
 		Install(service Service) error
 		Uninstall(serviceName string) error
 		List() ([]string, error)
-		Start() error
-		Stop() error
 	}
 )
