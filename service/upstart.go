@@ -22,10 +22,6 @@ func (usm *UpstartServiceManager) Install(service Service) error {
 	cmdName := getCommand(service)
 	os.Chmod(cmdName, 0777)
 
-	estr := ""
-	for k, v := range service.Environment {
-		estr += "\"" + k + "=" + v + "\" "
-	}
 	src := `
 description "` + service.Name + `"
 
@@ -33,8 +29,16 @@ start on (started networking)
 respawn
 
 chdir ` + service.Directory + `
-exec env ` + estr + ` ` + cmdName + `
 `
+	for k, v := range service.Environment {
+		src += k + "=" + v + "\n"
+	}
+
+	src += "exec " + cmdName
+	for _, arg := range service.Command[1:] {
+		src += " '" + strings.Replace(arg, "'", "\\'", -1) + "'"
+	}
+	src += "\n"
 
 	err := ioutil.WriteFile("/etc/init/"+service.Name+".conf", []byte(src), 0644)
 	if err != nil {
