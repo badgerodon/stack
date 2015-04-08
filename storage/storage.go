@@ -3,10 +3,14 @@ package storage
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 )
 
 type (
+	AuthProvider interface {
+		Authenticate()
+	}
 	Provider interface {
 		Delete(location Location) error
 		Get(location Location) (io.ReadCloser, error)
@@ -19,7 +23,14 @@ type (
 	}
 )
 
-var providers = map[string]Provider{}
+var (
+	authProviders = map[string]AuthProvider{}
+	providers     = map[string]Provider{}
+)
+
+func RegisterAuth(scheme string, authProvider AuthProvider) {
+	authProviders[scheme] = authProvider
+}
 
 func Register(scheme string, provider Provider) {
 	providers[scheme] = provider
@@ -49,6 +60,15 @@ func GetProvider(loc Location) (Provider, error) {
 		return p, nil
 	}
 	return nil, fmt.Errorf("unknown storage provider: %v", loc.Type())
+}
+
+func Authenticate(typ string) {
+	p, ok := authProviders[typ]
+	if ok {
+		p.Authenticate()
+	} else {
+		log.Fatalln("no auth provider registered for", typ)
+	}
 }
 
 func Delete(loc Location) error {

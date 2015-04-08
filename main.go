@@ -72,7 +72,22 @@ func main() {
 
 	app := cli.NewApp()
 	app.Name = "stack"
+	app.Usage = "a simple, cross-platform, open-source, pull-based deployment system"
+	app.Version = "0.1"
+	app.Author = "Caleb Doxsey"
+	app.Email = "caleb@doxsey.net"
 	app.Commands = []cli.Command{
+		{
+			Name:  "auth",
+			Usage: "generate credentials for services that need it",
+			Action: func(c *cli.Context) {
+				if len(c.Args()) < 1 {
+					log.Fatalln("provider is required")
+				}
+
+				storage.Authenticate(c.Args()[0])
+			},
+		},
 		{
 			Name:  "cp",
 			Usage: "copy a file: cp <source> <dest>",
