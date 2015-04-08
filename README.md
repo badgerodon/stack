@@ -13,8 +13,8 @@ A simple, cross-platform, open-source, pull-based deployment tool.
 - [x] .tar
 - [x] .tar.gz, .tgz
 - [x] .tar.bz2, .tbz, .tbz2, .tb2
-- [ ] .tar.lz, .tar.lzma, .tlz
-- [ ] .tar.xz, .txz
+- [x] .tar.lz, .tar.lzma, .tlz
+- [x] .tar.xz, .txz
 - [x] .zip
 
 ### Service Runners
