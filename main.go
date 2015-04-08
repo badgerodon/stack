@@ -73,10 +73,20 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "stack"
 	app.Usage = "a simple, cross-platform, open-source, pull-based deployment system"
-	app.Version = "0.1"
+	app.Version = "0.2"
 	app.Author = "Caleb Doxsey"
 	app.Email = "caleb@doxsey.net"
 	app.Commands = []cli.Command{
+		{
+			Name:  "apply",
+			Usage: "apply the configuration file",
+			Action: func(c *cli.Context) {
+				err := apply(c.Args().First())
+				if err != nil {
+					log.Fatalln(err)
+				}
+			},
+		},
 		{
 			Name:  "auth",
 			Usage: "generate credentials for services that need it",
@@ -117,16 +127,6 @@ func main() {
 			Usage: "remove a file",
 			Action: func(c *cli.Context) {
 				err := rm(c.Args().First())
-				if err != nil {
-					log.Fatalln(err)
-				}
-			},
-		},
-		{
-			Name:  "install",
-			Usage: "install the stack service",
-			Action: func(c *cli.Context) {
-				err := install(c.Args().First())
 				if err != nil {
 					log.Fatalln(err)
 				}

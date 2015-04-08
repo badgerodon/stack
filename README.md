@@ -1,26 +1,30 @@
 # The Badgerodon Stack
-A simple, pull-based deployment tool.
+A simple, cross-platform, open-source, pull-based deployment tool.
 
 ## Features
+- [x] `auth provider`: for providers that need it can be used to generate oauth credentials
+- [x] `rm url`: remove a file
+- [x] `ls url`: list folder contents
+- [x] `cp source destination`: copy a file
+- [x] `apply source`: run all the applications defined in a configuration file (in YAML format)
+- [x] `watch source`: run `apply source` whenever the configuration file is updated
 
 ### Archive Formats
-- [ ] .tar
-- [ ] .tar.gz, .tgz
-- [ ] .tar.bz2, .tbz, .tbz2, .tb2
-- [ ] .tar.Z, .taz, .tz
+- [x] .tar
+- [x] .tar.gz, .tgz
+- [x] .tar.bz2, .tbz, .tbz2, .tb2
 - [ ] .tar.lz, .tar.lzma, .tlz
 - [ ] .tar.xz, .txz
-- [ ] .zip
+- [x] .zip
 
 ### Service Runners
 - [x] local
 - FreeBSD
   - [ ] rc.d
 - Linux
-  - [x] systemd (user)
-  - [x] systemd (root)
+  - [x] systemd
   - [ ] sysv
-  - [ ] upstart
+  - [x] upstart
 - OSX
   - [ ] launchd
 - Windows
@@ -28,13 +32,13 @@ A simple, pull-based deployment tool.
 
 ### Storage Providers
 - [ ] Azure
-  - `azure://{storage-account}.blob.core.windows.net/{container}/{blob}`
+  - `azure://[{account}[.blob.core.windows.net]/]{container}/{path}`
   - ```
     type: azure
     account: ...
     key: ...
     container: ...
-    blob: ...
+    path: ...
     ```
   - if not provided
     - `account` defaults to `AZURE_ACCOUNT`
@@ -61,19 +65,26 @@ A simple, pull-based deployment tool.
     path: ...
     ```
 - [ ] FTP
-- [ ] [Google Drive](https://www.google.com/drive/)
+- [x] [Google Drive](https://www.google.com/drive/)
   - `gdrive://{path}`
   - ```
     type: gdrive
     client_id: ...
     client_secret: ...
+    access_token: ...
+    token_type: ...
     refresh_token: ...
+    expiry: ...
     path: ...
     ```
   - if not provided
-    - `client_id` defaults to `GDRIVE_CLIENT_ID` or ???
-    - `client_secret` defaults to `GDRIVE_CLIENT_SECRET` or ???
-    - `refresh_token` defaults to `GDRIVE_REFRESH_TOKEN` or ???
+    - `access_token` defaults to `GOOGLE_DRIVE_ACCESS_TOKEN`
+    - `token_type` defaults to `GOOGLE_DRIVE_TOKEN_TYPE`
+    - `expiry` defaults to `GOOGLE_DRIVE_EXPIRY` (in RFC3339 format)
+    - `refresh_token` defaults to `GOOGLE_DRIVE_REFRESH_TOKEN`
+    - `client_id` defaults to `GOOGLE_DRIVE_CLIENT_ID` or `304359942533-ra5badnhb5f1umi5vj4p5oohfhdiq8v8.apps.googleusercontent.com`
+    - `client_secret` defaults to `GOOGLE_DRIVE_CLIENT_SECRET` or `2ORaxB_WysnMlfeYW5yZsBgH`
+    - credentials can also be generated using `stack auth gdrive`, stored in a file and passed via `GOOGLE_DRIVE_CREDENTIALS_FILE`
 - [ ] [Google Cloud Storage](https://cloud.google.com/storage/)
   - `gs://{bucket}/{path}`
 - [ ] HTTP

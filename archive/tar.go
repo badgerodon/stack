@@ -15,10 +15,6 @@ func init() {
 	Register(".tar", Tar)
 }
 
-func (t *TarArchiveProvider) Create(dst, src string) error {
-	panic("not implemented")
-}
-
 func (t *TarArchiveProvider) Extract(dst, src string) error {
 	f, err := os.Open(src)
 	if err != nil {

@@ -15,10 +15,6 @@ func init() {
 	Register(".tgz", GZip)
 }
 
-func (tgz *GZipArchiveProvider) Create(dst, src string) error {
-	panic("not implemented")
-}
-
 func (tgz *GZipArchiveProvider) Extract(dst, src string) error {
 	f, err := os.Open(src)
 	if err != nil {

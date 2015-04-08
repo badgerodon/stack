@@ -10,7 +10,6 @@ import (
 type (
 	ArchiveProvider interface {
 		Extract(dst, src string) error
-		Create(dst, src string) error
 	}
 	archiveProviderDef struct {
 		suffix   string
@@ -37,15 +36,6 @@ func Register(suffix string, provider ArchiveProvider) {
 		provider ArchiveProvider
 	}{suffix, provider})
 	sort.Sort(archiveProviderDefs(archiveProviders))
-}
-
-func Create(dst, src string) error {
-	for _, apd := range archiveProviders {
-		if strings.HasSuffix(src, apd.suffix) {
-			return apd.provider.Create(dst, src)
-		}
-	}
-	return fmt.Errorf("unknown archive format: %s", filepath.Ext(src))
 }
 
 func Extract(dst, src string) error {

@@ -34,6 +34,8 @@ const (
 	GoogleDrive                    = GoogleDriveProvider(1)
 )
 
+var zeroTime time.Time
+
 func init() {
 	Register("gdocs", GoogleDrive)
 	Register("gdrive", GoogleDrive)
@@ -47,8 +49,8 @@ func (gdp GoogleDriveProvider) parse(loc Location) googleDriveRef {
 	ref.clientID = os.Getenv("GOOGLE_DRIVE_CLIENT_ID")
 	ref.clientSecret = os.Getenv("GOOGLE_DRIVE_CLIENT_ID")
 	ref.token.AccessToken = os.Getenv("GOOGLE_DRIVE_ACCESS_TOKEN")
-	ref.token.Expiry, _ = time.Parse(os.Getenv("GOOGLE_DRIVE_TOKEN_EXPIRY"), time.RFC3339)
 	ref.token.TokenType = os.Getenv("GOOGLE_DRIVE_TOKEN_TYPE")
+	ref.token.Expiry, _ = time.Parse(os.Getenv("GOOGLE_DRIVE_EXPIRY"), time.RFC3339)
 	ref.token.RefreshToken = os.Getenv("GOOGLE_DRIVE_REFRESH_TOKEN")
 
 	if ref.clientID == "" {
@@ -74,6 +76,19 @@ func (gdp GoogleDriveProvider) parse(loc Location) googleDriveRef {
 				err = json.NewDecoder(f).Decode(&ref.token)
 			}
 		}
+	}
+
+	if ref.token.AccessToken == "" {
+		ref.token.AccessToken = loc["access_token"]
+	}
+	if ref.token.RefreshToken == "" {
+		ref.token.RefreshToken = loc["refresh_token"]
+	}
+	if ref.token.Expiry == zeroTime {
+		ref.token.Expiry, _ = time.Parse(loc["expiry"], time.RFC3339)
+	}
+	if ref.token.TokenType == "" {
+		ref.token.TokenType = loc["token_type"]
 	}
 
 	ref.path = []string{}

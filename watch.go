@@ -31,7 +31,7 @@ func watch(src string) error {
 	for range watcher.C {
 		log.Println("[watch] new version")
 		backoff.Retry(func() error {
-			err := install(src)
+			err := apply(src)
 			if err != nil {
 				log.Printf("[watch] error installing: %v\n", err)
 			}

@@ -13,7 +13,7 @@ import (
 	"github.com/badgerodon/stack/storage"
 )
 
-func install(src string) error {
+func apply(src string) error {
 	pl := NewPortLock(49001)
 	pl.Lock()
 	defer pl.Unlock()
@@ -36,12 +36,12 @@ func install(src string) error {
 	prevCfg := ReadConfig()
 	defer SaveConfig(cfg)
 
-	err = installSources(prevCfg, cfg)
+	err = applySources(prevCfg, cfg)
 	if err != nil {
 		return fmt.Errorf("error processing sources: %v", err)
 	}
 
-	err = installApplications(prevCfg, cfg)
+	err = applyApplications(prevCfg, cfg)
 	if err != nil {
 		return fmt.Errorf("error processing applications: %v", err)
 	}
@@ -49,7 +49,7 @@ func install(src string) error {
 	return nil
 }
 
-func installApplications(prevCfg, newCfg *Config) error {
+func applyApplications(prevCfg, newCfg *Config) error {
 	for _, pa := range prevCfg.Applications {
 		found := false
 		for _, na := range newCfg.Applications {
@@ -124,7 +124,7 @@ func installApplications(prevCfg, newCfg *Config) error {
 	return nil
 }
 
-func installSources(prevCfg, newCfg *Config) error {
+func applySources(prevCfg, newCfg *Config) error {
 	// remove
 	for _, pa := range prevCfg.Applications {
 		found := false

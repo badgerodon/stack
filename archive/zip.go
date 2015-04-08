@@ -15,10 +15,6 @@ func init() {
 	Register(".zip", Zip)
 }
 
-func (z *ZipArchiveProvider) Create(dst, src string) error {
-	panic("not implemented")
-}
-
 func (z *ZipArchiveProvider) Extract(dst, src string) error {
 	rc, err := zip.OpenReader(src)
 	if err != nil {
