@@ -34,7 +34,6 @@ func apply(src string) error {
 	}
 
 	prevCfg := ReadConfig()
-	defer SaveConfig(cfg)
 
 	err = applySources(prevCfg, cfg)
 	if err != nil {
@@ -45,6 +44,8 @@ func apply(src string) error {
 	if err != nil {
 		return fmt.Errorf("error processing applications: %v", err)
 	}
+
+	SaveConfig(cfg)
 
 	return nil
 }

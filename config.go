@@ -210,6 +210,7 @@ func Validate(cfg *Config) {
 		if foundDownload && foundApplication && (foundService || len(a.Service.Command) == 0) {
 			delete(existingDownloads, a.DownloadPath())
 			delete(existingApplications, a.ApplicationPath())
+			delete(existingServices, a.ServiceName())
 		} else {
 			log.Println("[config] removing invalid application", a.Name)
 			copy(cfg.Applications[i:], cfg.Applications[i+1:])
@@ -224,5 +225,9 @@ func Validate(cfg *Config) {
 	for p, _ := range existingDownloads {
 		log.Println("[config] removing untracked download", p)
 		os.Remove(p)
+	}
+	for s, _ := range existingServices {
+		log.Println("[config] removing untracked service", s)
+		serviceManager.Uninstall(s)
 	}
 }
