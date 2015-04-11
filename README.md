@@ -1,5 +1,5 @@
 # The Badgerodon Stack
-A simple, cross-platform, open-source, pull-based deployment tool.
+A simple, cross-platform, open-source, pull-based deployment tool. An overview and walkthrough is available at [badgerodon.com/stack](https://www.badgerodon.com/stack).
 
 ## Features
 - [x] `auth provider`: for providers that need it can be used to generate oauth credentials
