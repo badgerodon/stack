@@ -2,14 +2,17 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/badgerodon/stack/service"
 	"github.com/badgerodon/stack/service/runner"
 	"github.com/badgerodon/stack/storage"
 	"github.com/codegangsta/cli"
+	"github.com/kardianos/osext"
 )
 
 func cp(src, dst string) error {
@@ -107,6 +110,42 @@ func main() {
 				}
 
 				err := cp(c.Args()[0], c.Args()[1])
+				if err != nil {
+					log.Fatalln(err)
+				}
+			},
+		},
+		{
+			Name:  "install",
+			Usage: "install the stack as a service: install",
+			Action: func(c *cli.Context) {
+				exeName, err := osext.Executable()
+				if err != nil {
+					log.Fatalln(err)
+				}
+
+				os.MkdirAll("/opt/badgerodon-stack", 0755)
+				src, err := os.Open(exeName)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				defer src.Close()
+
+				dst, err := os.Create("/opt/badgerodon-stack/stack")
+				if err != nil {
+					log.Fatalln(err)
+				}
+				io.Copy(dst, src)
+				dst.Close()
+
+				os.Chmod("/opt/badgerodon-stack/stack", 0755)
+
+				err = serviceManager.Install(service.Service{
+					Name:        "stack",
+					Directory:   "/opt/badgerodon-stack",
+					Command:     []string{"/opt/badgerodon-stack/stack", "watch", c.Args().First()},
+					Environment: map[string]string{},
+				})
 				if err != nil {
 					log.Fatalln(err)
 				}

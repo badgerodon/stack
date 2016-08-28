@@ -96,3 +96,25 @@ func (s googleStorage) List(loc Location) ([]string, error) {
 	}
 	return names, nil
 }
+
+func (s googleStorage) Put(loc Location, src io.Reader) error {
+	client, err := s.client(loc, storage.ScopeReadOnly)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	path := loc.Path()
+	if strings.HasPrefix(path, "/") {
+		path = path[1:]
+	}
+
+	bucket := client.Bucket(loc.Host())
+	w := bucket.Object(path).NewWriter(context.Background())
+	_, err = io.Copy(w, src)
+	if err != nil {
+		w.Close()
+		return err
+	}
+	return w.Close()
+}
