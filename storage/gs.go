@@ -2,34 +2,27 @@ package storage
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-
-	"google.golang.org/api/option"
-
-	"golang.org/x/oauth2/google"
-	"golang.org/x/oauth2/jwt"
+	"strings"
 
 	"cloud.google.com/go/storage"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/option"
 )
 
 // gs://bucket[/prefix]
 
 type (
-	GoogleStorageProvider byte
+	googleStorage         struct{}
 	googleCloudStorageRef struct {
 		clientID     string
 		clientSecret string
 	}
 )
 
-func init() {
-	//Register("gs", GoogleStorageProvider)
-}
-
-func (gsp GoogleStorageProvider) auth() (*jwt.Config, error) {
+func (s googleStorage) client(loc Location, scope string) (*storage.Client, error) {
 	var key []byte
 	if authFilePath := os.Getenv("GCLOUD_KEY_FILE"); authFilePath != "" {
 		if bs, err := ioutil.ReadFile(authFilePath); err == nil {
@@ -38,32 +31,68 @@ func (gsp GoogleStorageProvider) auth() (*jwt.Config, error) {
 	} else if auth := os.Getenv("GCLOUD_KEY"); auth != "" {
 		key = []byte(auth)
 	}
-	return google.JWTConfigFromJSON(
-		key,
-		storage.ScopeReadOnly,
-	)
-}
 
-func (gsp GoogleStorageProvider) Get(rawurl string) (io.ReadCloser, error) {
-	conf, err := gsp.auth()
+	ctx := context.Background()
+	if tok, err := google.JWTConfigFromJSON(key, scope); err == nil {
+		return storage.NewClient(ctx, option.WithTokenSource(tok.TokenSource(ctx)))
+	}
+	// fallback to default application credentials
+	tok, err := google.DefaultTokenSource(ctx, scope)
 	if err != nil {
 		return nil, err
 	}
+	return storage.NewClient(ctx, option.WithTokenSource(tok))
+}
 
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx, option.WithTokenSource(conf.TokenSource(ctx)))
+func (s googleStorage) Get(loc Location) (io.ReadCloser, error) {
+	client, err := s.client(loc, storage.ScopeReadOnly)
 	if err != nil {
 		return nil, err
 	}
 	defer client.Close()
 
-	return nil, fmt.Errorf("not implemented")
+	path := loc.Path()
+	if strings.HasPrefix(path, "/") {
+		path = path[1:]
+	}
+
+	bucket := client.Bucket(loc.Host())
+	object := bucket.Object(path)
+
+	return object.NewReader(context.Background())
 }
 
-func (gsp GoogleStorageProvider) Put(rawurl string, rdr io.Reader) error {
-	return fmt.Errorf("not implemented")
-}
+func (s googleStorage) List(loc Location) ([]string, error) {
+	client, err := s.client(loc, storage.ScopeReadOnly)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
 
-func (gsp GoogleStorageProvider) List(rawurl string) ([]string, error) {
-	return nil, fmt.Errorf("not implemented")
+	path := loc.Path()
+	if strings.HasPrefix(path, "/") {
+		path = path[1:]
+	}
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+
+	bucket := client.Bucket(loc.Host())
+	it := bucket.Objects(context.Background(), &storage.Query{
+		Prefix: path,
+	})
+	var names []string
+	for {
+		objects, _, err := it.NextPage()
+		if err != nil && err != storage.Done {
+			return nil, err
+		}
+		for _, object := range objects {
+			names = append(names, object.Name[len(path):])
+		}
+		if err == storage.Done {
+			break
+		}
+	}
+	return names, nil
 }

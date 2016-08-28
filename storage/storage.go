@@ -8,13 +8,29 @@ import (
 )
 
 type (
+	// A Getter can get files
+	Getter interface {
+		Get(location Location) (io.ReadCloser, error)
+	}
+
+	// A Lister can list files
+	Lister interface {
+		List(Location) ([]string, error)
+	}
+
+	// A Putter can put files
+	Putter interface {
+		Put(location Location, rdr io.Reader) error
+	}
+
 	AuthProvider interface {
 		Authenticate()
 	}
 	Provider interface {
+		Getter
+		Putter
+
 		Delete(location Location) error
-		Get(location Location) (io.ReadCloser, error)
-		Put(location Location, rdr io.Reader) error
 		List(location Location) ([]string, error)
 		Version(location Location, previous string) (string, error)
 	}
@@ -23,17 +39,37 @@ type (
 	}
 )
 
+func init() {
+	Register("gs", googleStorage{})
+}
+
 var (
 	authProviders = map[string]AuthProvider{}
 	providers     = map[string]Provider{}
+
+	getters = map[string]Getter{}
+	putters = map[string]Putter{}
+	listers = map[string]Lister{}
 )
 
 func RegisterAuth(scheme string, authProvider AuthProvider) {
 	authProviders[scheme] = authProvider
 }
 
-func Register(scheme string, provider Provider) {
-	providers[scheme] = provider
+// Register registers a provider
+func Register(scheme string, provider interface{}) {
+	if g, ok := provider.(Getter); ok {
+		getters[scheme] = g
+	}
+	if p, ok := provider.(Putter); ok {
+		putters[scheme] = p
+	}
+	if l, ok := provider.(Lister); ok {
+		listers[scheme] = l
+	}
+	if p, ok := provider.(Provider); ok {
+		providers[scheme] = p
+	}
 }
 
 type (
@@ -79,26 +115,29 @@ func Delete(loc Location) error {
 	return p.Delete(loc)
 }
 
+// Get returns an io.ReadCloser for the given location
 func Get(loc Location) (io.ReadCloser, error) {
-	p, err := GetProvider(loc)
-	if err != nil {
-		return nil, err
+	g, ok := getters[loc.Type()]
+	if !ok {
+		return nil, fmt.Errorf("no getter associated with scheme: %v", loc.Type())
 	}
-	return p.Get(loc)
+	return g.Get(loc)
 }
 
+// List returns a list of filenames for the given location
 func List(loc Location) ([]string, error) {
-	p, err := GetProvider(loc)
-	if err != nil {
-		return nil, err
+	l, ok := listers[loc.Type()]
+	if !ok {
+		return nil, fmt.Errorf("no lister associated with schem: %v", loc.Type())
 	}
-	return p.List(loc)
+	return l.List(loc)
 }
 
+// Put writes an io.Reader to the given location
 func Put(loc Location, rdr io.Reader) error {
-	p, err := GetProvider(loc)
-	if err != nil {
-		return err
+	p, ok := putters[loc.Type()]
+	if !ok {
+		return fmt.Errorf("no putter associated with scheme: %v", loc.Type())
 	}
 	return p.Put(loc, rdr)
 }

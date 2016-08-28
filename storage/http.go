@@ -79,7 +79,6 @@ func (hp *HTTPProvider) Version(loc Location, previous string) (string, error) {
 	}
 	if res.StatusCode/100 == 2 {
 		return res.Header.Get("ETag"), nil
-	} else {
-		return "", fmt.Errorf("bad status: %v", res.Status)
 	}
+	return "", fmt.Errorf("bad status: %v", res.Status)
 }

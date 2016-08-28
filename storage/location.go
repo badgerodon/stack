@@ -20,6 +20,10 @@ func (loc Location) Ext() string {
 	return ext
 }
 
+func (loc Location) Host() string {
+	return loc["host"]
+}
+
 func (loc Location) Path() string {
 	return loc["path"]
 }
@@ -38,6 +42,7 @@ func (loc *Location) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return err
 }
 
+// ParseLocation parses a location from a variety of input formats
 func ParseLocation(obj interface{}) (Location, error) {
 	switch t := obj.(type) {
 	case string:
@@ -58,12 +63,12 @@ func ParseLocation(obj interface{}) (Location, error) {
 				loc["password"], _ = u.User.Password()
 			}
 			return loc, nil
-		} else {
-			return Location{
-				"type": "local",
-				"path": t,
-			}, nil
 		}
+		// no scheme, so treat this as a local file
+		return Location{
+			"type": "local",
+			"path": t,
+		}, nil
 	case map[interface{}]interface{}:
 		loc := Location{}
 		for k, v := range t {
