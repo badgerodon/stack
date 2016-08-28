@@ -8,6 +8,10 @@ import (
 	"github.com/badgerodon/stack/storage"
 )
 
+// PollInterval is the time in between looking for new versions
+var PollInterval = time.Second * 15
+
+// A Watcher watches for changes
 type Watcher struct {
 	C       <-chan struct{}
 	done    chan struct{}
@@ -15,6 +19,7 @@ type Watcher struct {
 	mu      sync.Mutex
 }
 
+// Watch looks for changes at the given location
 func Watch(loc storage.Location) (*Watcher, error) {
 	provider, err := storage.GetProvider(loc)
 	if err != nil {
@@ -24,7 +29,7 @@ func Watch(loc storage.Location) (*Watcher, error) {
 		previous := ""
 		changed := true
 		previous, _ = provider.Version(loc, previous)
-		ticker := time.NewTicker(time.Second * 15)
+		ticker := time.NewTicker(PollInterval)
 		defer ticker.Stop()
 		for {
 			if changed {
@@ -66,6 +71,7 @@ func newWatcher(f func(done <-chan struct{}, change chan<- struct{})) *Watcher {
 	}
 }
 
+// Stop stops the watcher
 func (w *Watcher) Stop() {
 	w.mu.Lock()
 	defer w.mu.Unlock()

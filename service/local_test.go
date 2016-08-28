@@ -1,7 +1,7 @@
 package service
 
 import (
-	"code.google.com/p/go-uuid/uuid"
+	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"

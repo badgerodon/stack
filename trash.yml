@@ -1,0 +1,9 @@
+import:
+- package: github.com/satori/go.uuid
+  version: master
+- package: cloud.google.com/go/storage
+  version: master
+- package: github.com/t3rm1n4l/go-mega
+  version: master
+- package: github.com/ulikunitz/xz
+  version: master

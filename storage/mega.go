@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go-uuid/uuid"
+	"github.com/satori/go.uuid"
 
 	"github.com/t3rm1n4l/go-mega"
 )
@@ -212,7 +212,7 @@ func (mp *MegaProvider) Get(loc Location) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	tmpName := filepath.Join(os.TempDir(), uuid.New())
+	tmpName := filepath.Join(os.TempDir(), uuid.NewV4().String())
 
 	err = client.DownloadFile(node, tmpName, nil)
 	if err != nil {
@@ -240,7 +240,7 @@ func (mp *MegaProvider) Put(loc Location, rdr io.Reader) error {
 		name = name[strings.LastIndex(name, "/")+1:]
 	}
 
-	tmpName := filepath.Join(os.TempDir(), uuid.New())
+	tmpName := filepath.Join(os.TempDir(), uuid.NewV4().String())
 	defer os.Remove(tmpName)
 	tmp, err := os.Create(tmpName)
 	if err != nil {

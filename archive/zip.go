@@ -7,15 +7,12 @@ import (
 	"path/filepath"
 )
 
-type ZipArchiveProvider struct{}
+// Zip extracts .zip files
+var Zip zipExtractor
 
-var Zip = &ZipArchiveProvider{}
+type zipExtractor struct{}
 
-func init() {
-	Register(".zip", Zip)
-}
-
-func (z *ZipArchiveProvider) Extract(dst, src string) error {
+func (z *zipExtractor) Extract(dst, src string) error {
 	rc, err := zip.OpenReader(src)
 	if err != nil {
 		return err

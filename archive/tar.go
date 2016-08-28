@@ -7,15 +7,12 @@ import (
 	"path/filepath"
 )
 
-type TarArchiveProvider struct{}
+// Tar extracts uncompressed tar archives
+var Tar tarArchiveProvider
 
-var Tar = &TarArchiveProvider{}
+type tarArchiveProvider struct{}
 
-func init() {
-	Register(".tar", Tar)
-}
-
-func (t *TarArchiveProvider) Extract(dst, src string) error {
+func (t tarArchiveProvider) Extract(dst, src string) error {
 	f, err := os.Open(src)
 	if err != nil {
 		return err
@@ -25,7 +22,7 @@ func (t *TarArchiveProvider) Extract(dst, src string) error {
 	return t.ExtractReader(dst, f)
 }
 
-func (t *TarArchiveProvider) ExtractReader(dst string, src io.Reader) error {
+func (t tarArchiveProvider) ExtractReader(dst string, src io.Reader) error {
 	tr := tar.NewReader(src)
 
 	for {

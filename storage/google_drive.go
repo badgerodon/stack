@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"camlistore.org/pkg/constants/google"
-	"camlistore.org/third_party/golang.org/x/oauth2"
 	"golang.org/x/net/context"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v2"
 )
 
@@ -54,11 +54,11 @@ func (gdp GoogleDriveProvider) parse(loc Location) googleDriveRef {
 	ref.token.RefreshToken = os.Getenv("GOOGLE_DRIVE_REFRESH_TOKEN")
 
 	if ref.clientID == "" {
-		ref.clientID = DefaultGoogleCloudStorageClientID
+		ref.clientID = DefaultGoogleDriveClientID
 	}
 
 	if ref.clientSecret == "" {
-		ref.clientSecret = DefaultGoogleCloudStorageClientSecret
+		ref.clientSecret = DefaultGoogleDriveClientSecret
 	}
 
 	// support a json block for credentials

@@ -1,37 +1,35 @@
-// +build cgo
-
 package archive
 
 import (
+	"bufio"
 	"io"
-	"os"
 
-	"github.com/remyoudompheng/go-liblzma"
+	"github.com/ulikunitz/xz"
+	"github.com/ulikunitz/xz/lzma"
 )
 
-type XZArchiveProvider struct{}
+var (
+	// LZMA extracts lzma archives
+	LZMA lzmaExtractor
+	// XZ extracts xz archives
+	XZ xzExtractor
+)
 
-var XZ = &XZArchiveProvider{}
+type (
+	lzmaExtractor struct{}
+	xzExtractor   struct{}
+)
 
-func init() {
-	Register(".tar.xz", XZ)
-	Register(".tar.lz", XZ)
-	Register(".tar.lzma", XZ)
-	Register(".txz", XZ)
-	Register(".tlz", XZ)
-}
-
-func (txz *XZArchiveProvider) Extract(dst, src string) error {
-	f, err := os.Open(src)
+func (p lzmaExtractor) ExtractReader(dst string, src io.Reader) error {
+	z, err := lzma.NewReader(bufio.NewReader(src))
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return txz.ExtractReader(dst, f)
+	return Tar.ExtractReader(dst, z)
 }
 
-func (txz *XZArchiveProvider) ExtractReader(dst string, src io.Reader) error {
-	z, err := xz.NewReader(src)
+func (p xzExtractor) ExtractReader(dst string, src io.Reader) error {
+	z, err := xz.NewReader(bufio.NewReader(src))
 	if err != nil {
 		return err
 	}
