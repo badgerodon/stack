@@ -119,31 +119,33 @@ func main() {
 			Name:  "install",
 			Usage: "install the stack as a service: install",
 			Action: func(c *cli.Context) {
+				if len(c.Args()) < 1 {
+					log.Fatalln("config file location is required")
+				}
+
 				exeName, err := osext.Executable()
 				if err != nil {
 					log.Fatalln(err)
 				}
 
-				os.MkdirAll("/opt/badgerodon-stack", 0755)
+				os.MkdirAll(rootDir, 0755)
 				src, err := os.Open(exeName)
 				if err != nil {
 					log.Fatalln(err)
 				}
 				defer src.Close()
 
-				dst, err := os.Create("/opt/badgerodon-stack/stack")
+				dst, err := os.OpenFile(filepath.Join(rootDir, "stack"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 				if err != nil {
 					log.Fatalln(err)
 				}
 				io.Copy(dst, src)
 				dst.Close()
 
-				os.Chmod("/opt/badgerodon-stack/stack", 0755)
-
 				err = serviceManager.Install(service.Service{
 					Name:        "stack",
-					Directory:   "/opt/badgerodon-stack",
-					Command:     []string{"/opt/badgerodon-stack/stack", "watch", c.Args().First()},
+					Directory:   rootDir,
+					Command:     []string{filepath.Join(rootDir, "stack"), "watch", c.Args().First()},
 					Environment: map[string]string{},
 				})
 				if err != nil {

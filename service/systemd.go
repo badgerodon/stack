@@ -41,7 +41,7 @@ Description=`+service.Name+`
 
 [Service]
 Environment=`+estr+`
-ExecStart=`+cmdName+`
+ExecStart=`+cmdName+` `+strings.Join(service.Command[1:], " ")+`
 WorkingDirectory=`+service.Directory+`
 Restart=always
 
@@ -78,7 +78,7 @@ func (sdsm *SystemDServiceManager) List() ([]string, error) {
 		mode = "--user"
 	}
 
-	out, err := exec.Command("systemctl", mode, "list-units", "--full", "--no-pager", "badgerodon-stack*").CombinedOutput()
+	out, err := exec.Command("systemctl", mode, "list-units", "--all", "--full", "--no-pager", "--no-legend", "badgerodon-stack*").CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("error listing services: %v", err)
 	}

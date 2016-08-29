@@ -93,6 +93,31 @@ type (
 	}
 )
 
+// UnmarshalYAML unmarshals a yaml structure
+func (as *ApplicationService) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var t1 struct {
+		Command     []string          `yaml:"command,omitempty"`
+		Environment map[string]string `yaml:"environment,omitempty"`
+	}
+	err := unmarshal(&t1)
+	if err == nil {
+		as.Command = t1.Command
+		as.Environment = t1.Environment
+		return nil
+	}
+	var t2 struct {
+		Command     string            `yaml:"command,omitempty"`
+		Environment map[string]string `yaml:"environment,omitempty"`
+	}
+	err = unmarshal(&t2)
+	if err == nil {
+		as.Command = strings.Fields(t2.Command)
+		as.Environment = t2.Environment
+		return nil
+	}
+	return err
+}
+
 func (a Application) ApplicationPath() string {
 	return filepath.Join(rootDir, "applications", a.Name)
 }
@@ -218,15 +243,15 @@ func Validate(cfg *Config) {
 			i--
 		}
 	}
-	for a, _ := range existingApplications {
+	for a := range existingApplications {
 		log.Println("[config] removing untracked application", a)
 		os.RemoveAll(a)
 	}
-	for p, _ := range existingDownloads {
+	for p := range existingDownloads {
 		log.Println("[config] removing untracked download", p)
 		os.Remove(p)
 	}
-	for s, _ := range existingServices {
+	for s := range existingServices {
 		log.Println("[config] removing untracked service", s)
 		serviceManager.Uninstall(s)
 	}
