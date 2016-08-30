@@ -21,14 +21,10 @@ type Watcher struct {
 
 // Watch looks for changes at the given location
 func Watch(loc storage.Location) (*Watcher, error) {
-	provider, err := storage.GetProvider(loc)
-	if err != nil {
-		return nil, err
-	}
 	return newWatcher(func(done <-chan struct{}, change chan<- struct{}) {
 		previous := ""
 		changed := true
-		previous, _ = provider.Version(loc, previous)
+		previous, _ = storage.Version(loc, previous)
 		ticker := time.NewTicker(PollInterval)
 		defer ticker.Stop()
 		for {
@@ -42,7 +38,7 @@ func Watch(loc storage.Location) (*Watcher, error) {
 			} else {
 				select {
 				case <-ticker.C:
-					next, err := provider.Version(loc, previous)
+					next, err := storage.Version(loc, previous)
 					if err != nil {
 						log.Println("[watcher] error getting version:", err)
 						time.Sleep(time.Minute)

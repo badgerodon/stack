@@ -23,16 +23,20 @@ type (
 		Put(location Location, rdr io.Reader) error
 	}
 
+	Versioner interface {
+		Version(location Location, previous string) (string, error)
+	}
+
 	AuthProvider interface {
 		Authenticate()
 	}
 	Provider interface {
 		Getter
 		Putter
+		Lister
+		Versioner
 
 		Delete(location Location) error
-		List(location Location) ([]string, error)
-		Version(location Location, previous string) (string, error)
 	}
 	Sizer interface {
 		Size() (int64, error)
@@ -40,6 +44,7 @@ type (
 )
 
 func init() {
+	Register("github", GitHub)
 	Register("gs", googleStorage{})
 }
 
@@ -47,9 +52,10 @@ var (
 	authProviders = map[string]AuthProvider{}
 	providers     = map[string]Provider{}
 
-	getters = map[string]Getter{}
-	putters = map[string]Putter{}
-	listers = map[string]Lister{}
+	getters    = map[string]Getter{}
+	putters    = map[string]Putter{}
+	listers    = map[string]Lister{}
+	versioners = map[string]Versioner{}
 )
 
 func RegisterAuth(scheme string, authProvider AuthProvider) {
@@ -66,6 +72,9 @@ func Register(scheme string, provider interface{}) {
 	}
 	if l, ok := provider.(Lister); ok {
 		listers[scheme] = l
+	}
+	if v, ok := provider.(Versioner); ok {
+		versioners[scheme] = v
 	}
 	if p, ok := provider.(Provider); ok {
 		providers[scheme] = p
@@ -140,4 +149,13 @@ func Put(loc Location, rdr io.Reader) error {
 		return fmt.Errorf("no putter associated with scheme: %v", loc.Type())
 	}
 	return p.Put(loc, rdr)
+}
+
+// Version returns the version of the file at the given location
+func Version(loc Location, previous string) (string, error) {
+	v, ok := versioners[loc.Type()]
+	if !ok {
+		return "", fmt.Errorf("no versioner associated with scheme: %v", loc.Type())
+	}
+	return v.Version(loc, previous)
 }

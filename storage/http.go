@@ -5,20 +5,20 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
-type (
-	HTTPProvider struct{}
-)
+type httpStorage struct{}
 
-var HTTP = &HTTPProvider{}
+// HTTP stores data over http
+var HTTP httpStorage
 
 func init() {
 	Register("http", HTTP)
 	Register("https", HTTP)
 }
 
-func (hp *HTTPProvider) req(loc Location) *http.Request {
+func (s httpStorage) req(loc Location) *http.Request {
 	u := url.URL{
 		Scheme: "http",
 	}
@@ -32,6 +32,11 @@ func (hp *HTTPProvider) req(loc Location) *http.Request {
 		u.Path = p
 	}
 	req, _ := http.NewRequest("GET", u.String(), nil)
+	for n, v := range loc {
+		if strings.HasPrefix(n, "Headers.") {
+			req.Header.Set(n[len("Headers."):], v)
+		}
+	}
 	if user, ok := loc["user"]; ok {
 		pw := loc["password"]
 		req.SetBasicAuth(user, pw)
@@ -39,46 +44,38 @@ func (hp *HTTPProvider) req(loc Location) *http.Request {
 	return req
 }
 
-func (hp *HTTPProvider) Delete(loc Location) error {
-	panic("not implemented")
-}
-
-func (hp *HTTPProvider) Get(loc Location) (io.ReadCloser, error) {
-	req := hp.req(loc)
+func (s httpStorage) Get(loc Location) (io.ReadCloser, error) {
+	req := s.req(loc)
 	req.Method = "GET"
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
+
 	if res.StatusCode/100 == 2 {
 		return res.Body, nil
-	} else {
-		res.Body.Close()
-		return nil, fmt.Errorf("bad status: %v", res.Status)
 	}
+
+	res.Body.Close()
+	return nil, fmt.Errorf("bad status: %v", res.Status)
 }
 
-func (hp *HTTPProvider) Put(loc Location, rdr io.Reader) error {
-	panic("not implemented")
-}
-
-func (hp *HTTPProvider) List(loc Location) ([]string, error) {
-	panic("not implemented")
-}
-
-func (hp *HTTPProvider) Version(loc Location, previous string) (string, error) {
-	req := hp.req(loc)
+func (s httpStorage) Version(loc Location, previous string) (string, error) {
+	req := s.req(loc)
 	req.Method = "HEAD"
 	req.Header.Set("If-None-Match", previous)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
+
 	if res.StatusCode == 302 {
 		return previous, nil
 	}
+
 	if res.StatusCode/100 == 2 {
 		return res.Header.Get("ETag"), nil
 	}
+
 	return "", fmt.Errorf("bad status: %v", res.Status)
 }
