@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"hash/fnv"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/badgerodon/stack/service"
 	"github.com/badgerodon/stack/storage"
+	"github.com/minio/blake2b-simd"
 )
 
 var rootDir, tmpDir string
@@ -77,6 +78,12 @@ func init() {
 }
 
 type (
+	// StackState is the local state of the badgerodon stack
+	StackState struct {
+		Applications []Application `yaml:"applications"`
+		Downloads    map[string]string
+	}
+
 	Config struct {
 		Applications []Application `yaml:"applications"`
 	}
@@ -126,48 +133,52 @@ func (a Application) DownloadPath() string {
 	return filepath.Join(rootDir, "downloads", a.Name+a.Source.Ext())
 }
 
-func (a Application) Hash() uint64 {
-	h := fnv.New64a()
-	json.NewEncoder(h).Encode(a)
-	return h.Sum64()
+// Hash is a hash of the application data
+func (a Application) Hash() string {
+	bs, _ := json.Marshal(a)
+	return fmt.Sprintf("%X", blake2b.Sum512(bs))
 }
 
-func (a Application) SourceHash() uint64 {
-	h := fnv.New64a()
-	json.NewEncoder(h).Encode(a.Source)
-	return h.Sum64()
+// SourceHash is a hash of the source location
+func (a Application) SourceHash() string {
+	bs, _ := json.Marshal(a.Source)
+	return fmt.Sprintf("%X", blake2b.Sum512(bs))
 }
 
 func (a Application) ServiceName() string {
 	return "badgerodon-stack-" + a.Name
 }
 
-func ReadConfig() *Config {
-	cfg := &Config{}
-	bs, err := ioutil.ReadFile(filepath.Join(rootDir, "config.yaml"))
+func ReadStackState() *StackState {
+	state := &StackState{}
+	bs, err := ioutil.ReadFile(filepath.Join(rootDir, "state.json"))
 	if err == nil {
-		err = yaml.Unmarshal(bs, cfg)
+		err = json.Unmarshal(bs, state)
 		if err != nil {
-			log.Println("[ReadConfig] error unmarshaling:", err)
+			log.Println("[ReadStackState] error unmarshaling:", err)
 		}
 	}
 
-	if cfg.Applications == nil {
-		cfg.Applications = make([]Application, 0)
+	if state.Applications == nil {
+		state.Applications = make([]Application, 0)
+	}
+	if state.Downloads == nil {
+		state.Downloads = make(map[string]string)
 	}
 
-	Validate(cfg)
+	Validate(state)
 
-	return cfg
+	return state
 }
 
-func SaveConfig(cfg *Config) {
-	out, err := yaml.Marshal(cfg)
+func SaveStackState(state *StackState) {
+	out, err := json.Marshal(state)
 	if err != nil {
-		log.Println("[SaveConfig] error marshaling:", err)
+		log.Println("[SaveStackState] error marshaling:", err)
 		return
 	}
-	ioutil.WriteFile(filepath.Join(rootDir, "config.yaml"), out, 0755)
+	ioutil.WriteFile(filepath.Join(rootDir, "state.json"), out, 0755)
+	log.Println("[SaveStackState] saved state:", string(out))
 }
 
 func ParseConfig(rdr io.Reader) (*Config, error) {
@@ -179,27 +190,9 @@ func ParseConfig(rdr io.Reader) (*Config, error) {
 	return &cfg, yaml.Unmarshal(bs, &cfg)
 }
 
-func Validate(cfg *Config) {
-	// downloads
-	root := filepath.Join(rootDir, "downloads")
-	existingDownloads := map[string]struct{}{}
-	filepath.Walk(root, func(p string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if p == root {
-			return nil
-		}
-		if fi.IsDir() {
-			log.Println("[config] removing folder in downloads:", p)
-			os.RemoveAll(p)
-			return filepath.SkipDir
-		}
-		existingDownloads[p] = struct{}{}
-		return nil
-	})
+func Validate(state *StackState) {
 	// applications
-	root = filepath.Join(rootDir, "applications")
+	root := filepath.Join(rootDir, "applications")
 	existingApplications := map[string]struct{}{}
 	filepath.Walk(root, func(p string, fi os.FileInfo, err error) error {
 		if err != nil {
@@ -227,29 +220,23 @@ func Validate(cfg *Config) {
 		}
 	}
 
-	for i := 0; i < len(cfg.Applications); i++ {
-		a := cfg.Applications[i]
-		_, foundDownload := existingDownloads[a.DownloadPath()]
+	for i := 0; i < len(state.Applications); i++ {
+		a := state.Applications[i]
 		_, foundApplication := existingApplications[a.ApplicationPath()]
 		_, foundService := existingServices[a.ServiceName()]
-		if foundDownload && foundApplication && (foundService || len(a.Service.Command) == 0) {
-			delete(existingDownloads, a.DownloadPath())
+		if foundApplication && (foundService || len(a.Service.Command) == 0) {
 			delete(existingApplications, a.ApplicationPath())
 			delete(existingServices, a.ServiceName())
 		} else {
 			log.Println("[config] removing invalid application", a.Name)
-			copy(cfg.Applications[i:], cfg.Applications[i+1:])
-			cfg.Applications = cfg.Applications[:len(cfg.Applications)-1]
+			copy(state.Applications[i:], state.Applications[i+1:])
+			state.Applications = state.Applications[:len(state.Applications)-1]
 			i--
 		}
 	}
 	for a := range existingApplications {
 		log.Println("[config] removing untracked application", a)
 		os.RemoveAll(a)
-	}
-	for p := range existingDownloads {
-		log.Println("[config] removing untracked download", p)
-		os.Remove(p)
 	}
 	for s := range existingServices {
 		log.Println("[config] removing untracked service", s)

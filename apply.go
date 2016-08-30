@@ -33,25 +33,23 @@ func apply(src string) error {
 		return err
 	}
 
-	prevCfg := ReadConfig()
+	state := ReadStackState()
 
-	err = applySources(prevCfg, cfg)
+	err = applySources(state, cfg)
 	if err != nil {
 		return fmt.Errorf("error processing sources: %v", err)
 	}
 
-	err = applyApplications(prevCfg, cfg)
+	err = applyApplications(state, cfg)
 	if err != nil {
 		return fmt.Errorf("error processing applications: %v", err)
 	}
 
-	SaveConfig(cfg)
-
 	return nil
 }
 
-func applyApplications(prevCfg, newCfg *Config) error {
-	for _, pa := range prevCfg.Applications {
+func applyApplications(state *StackState, newCfg *Config) error {
+	for _, pa := range state.Applications {
 		found := false
 		for _, na := range newCfg.Applications {
 			if pa.Hash() == na.Hash() {
@@ -75,7 +73,7 @@ func applyApplications(prevCfg, newCfg *Config) error {
 	}
 	for _, na := range newCfg.Applications {
 		found := false
-		for _, pa := range prevCfg.Applications {
+		for _, pa := range state.Applications {
 			if na.Hash() == pa.Hash() {
 				found = true
 				break
@@ -120,55 +118,62 @@ func applyApplications(prevCfg, newCfg *Config) error {
 					return fmt.Errorf("error installing service: %v", err)
 				}
 			}
+
+			state.Applications = append(state.Applications, na)
+			SaveStackState(state)
 		}
 	}
 	return nil
 }
 
-func applySources(prevCfg, newCfg *Config) error {
+func applySources(state *StackState, newCfg *Config) error {
 	// remove
-	for _, pa := range prevCfg.Applications {
+	for path, hash := range state.Downloads {
 		found := false
-		for _, na := range newCfg.Applications {
-			if pa.SourceHash() == na.SourceHash() {
+		for _, app := range newCfg.Applications {
+			if app.DownloadPath() == path && app.SourceHash() == hash {
 				found = true
 				break
 			}
 		}
 		if !found {
-			log.Println("[install] [source] remove", pa.DownloadPath())
-			os.Remove(pa.DownloadPath())
+			log.Println("[install] [source] remove", path)
+			os.Remove(path)
+
+			delete(state.Downloads, path)
+			SaveStackState(state)
 		}
 	}
 	// add
-	for _, na := range newCfg.Applications {
-		found := false
-		for _, pa := range prevCfg.Applications {
-			if na.SourceHash() == pa.SourceHash() {
-				found = true
-				break
-			}
+	for _, app := range newCfg.Applications {
+		path := app.DownloadPath()
+		hash := app.SourceHash()
+		if _, ok := state.Downloads[path]; ok {
+			// no need to check hash because we would have already removed the file
+			// above
+			continue
 		}
-		if found {
-			log.Println("[install] [source] skip", na.DownloadPath())
-		} else {
-			log.Println("[install] [source] download", na.DownloadPath(), na.Source)
-			rc, err := storage.Get(na.Source)
-			if err != nil {
-				return fmt.Errorf("error downloading: %v", err)
-			}
-			f, err := os.Create(na.DownloadPath())
-			if err != nil {
-				rc.Close()
-				return fmt.Errorf("error creating download file: %v", err)
-			}
-			_, err = io.Copy(f, rc)
+		log.Println("[install] [source] download", path, app.Source)
+
+		rc, err := storage.Get(app.Source)
+		if err != nil {
+			return fmt.Errorf("error downloading: %v", err)
+		}
+		//TODO: make this an atomic update
+		f, err := os.Create(path)
+		if err != nil {
 			rc.Close()
-			f.Close()
-			if err != nil {
-				return fmt.Errorf("error downloading: %v", err)
-			}
+			return fmt.Errorf("error creating download file: %v", err)
 		}
+		_, err = io.Copy(f, rc)
+		rc.Close()
+		f.Close()
+		if err != nil {
+			return fmt.Errorf("error downloading: %v", err)
+		}
+
+		state.Downloads[path] = hash
+		SaveStackState(state)
 	}
 	return nil
 }

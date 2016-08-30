@@ -11,3 +11,5 @@ import:
   version: master
 - package: google.golang.org/grpc
   version: master
+- package: github.com/minio/blake2b-simd
+  version: master
