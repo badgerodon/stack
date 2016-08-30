@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"fmt"
 	"io"
 	"strings"
 )
@@ -11,7 +10,7 @@ type githubStorage struct{}
 // GitHub stores data on GitHub
 var GitHub githubStorage
 
-func (s githubStorage) Get(loc Location) (io.ReadCloser, error) {
+func (s githubStorage) build(loc Location) Location {
 	dup := make(Location)
 	for k, v := range loc {
 		dup[k] = v
@@ -34,15 +33,13 @@ func (s githubStorage) Get(loc Location) (io.ReadCloser, error) {
 	path = append(path[:4], append([]string{"contents"}, path[4:]...)...)
 	dup["path"] = strings.Join(path, "/")
 	dup["Headers.Accept"] = "application/vnd.github.v3.raw"
-	fmt.Println("LOC", dup)
-	return HTTP.Get(dup)
+	return dup
+}
+
+func (s githubStorage) Get(loc Location) (io.ReadCloser, error) {
+	return HTTP.Get(s.build(loc))
 }
 
 func (s githubStorage) Version(loc Location, previous string) (string, error) {
-	dup := make(Location)
-	for k, v := range loc {
-		dup[k] = v
-	}
-	dup["Headers.Accept"] = "application/vnd.github.v3.raw"
-	return HTTP.Version(dup, previous)
+	return HTTP.Version(s.build(loc), previous)
 }

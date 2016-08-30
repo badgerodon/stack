@@ -69,7 +69,7 @@ func (s httpStorage) Version(loc Location, previous string) (string, error) {
 		return "", err
 	}
 
-	if res.StatusCode == 302 {
+	if res.StatusCode == 302 || res.StatusCode == 304 {
 		return previous, nil
 	}
 

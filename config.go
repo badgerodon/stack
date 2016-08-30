@@ -54,7 +54,11 @@ func init() {
 			if isUpstart() {
 				serviceManager = service.NewUpstartServiceManager()
 			} else if isSystemD() {
-				serviceManager = service.NewSystemDServiceManager("/usr/lib/systemd/system/", false)
+				if _, err := os.Stat("/usr/lib/systemd/system"); err == nil {
+					serviceManager = service.NewSystemDServiceManager("/usr/lib/systemd/system/", false)
+				} else {
+					serviceManager = service.NewSystemDServiceManager("/etc/systemd/system/", false)
+				}
 			} else {
 				serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.state"))
 			}
