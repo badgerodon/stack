@@ -29,20 +29,30 @@ func cp(src, dst string) error {
 		return err
 	}
 
-	dnl, err := storage.ParseLocation(dst)
-	if err != nil {
-		return err
-	}
+	if dst == "-" {
+		source, err := storage.Get(snl)
+		if err != nil {
+			return err
+		}
+		defer source.Close()
 
-	source, err := storage.Get(snl)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
+		io.Copy(os.Stdout, source)
+	} else {
+		dnl, err := storage.ParseLocation(dst)
+		if err != nil {
+			return err
+		}
 
-	err = storage.Put(dnl, source)
-	if err != nil {
-		return err
+		source, err := storage.Get(snl)
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+
+		err = storage.Put(dnl, source)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -110,6 +120,20 @@ func main() {
 				}
 
 				err := cp(c.Args()[0], c.Args()[1])
+				if err != nil {
+					log.Fatalln(err)
+				}
+			},
+		},
+		{
+			Name:  "cat",
+			Usage: "cat a file: cat <source>",
+			Action: func(c *cli.Context) {
+				if len(c.Args()) < 1 {
+					log.Fatalln("source is required")
+				}
+
+				err := cp(c.Args()[0], "-")
 				if err != nil {
 					log.Fatalln(err)
 				}

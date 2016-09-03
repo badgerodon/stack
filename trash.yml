@@ -15,3 +15,13 @@ import:
   version: master
 - package: gopkg.in/yaml.v2
   version: master
+- package: gopkg.in/src-d/go-git.v3
+  version: master
+- package: github.com/sergi/go-diff
+  version: master
+- package: github.com/sourcegraph/go-vcsurl
+  version: master
+- package: gopkg.in/sourcegraph/go-vcsurl.v1
+  version: master
+- package: github.com/pkg/errors
+  version: master

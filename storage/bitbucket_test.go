@@ -34,7 +34,7 @@ func TestBitBucket(t *testing.T) {
 
 	for _, tc := range cases {
 		loc, _ := ParseLocation(tc.input)
-		output := BitBucket.Build(loc)
+		output := BitBucket.BuildHTTP(loc)
 		if !reflect.DeepEqual(output, tc.expect) {
 			t.Errorf("for: %v\nexpected: %v\n     got: %v",
 				tc.input, tc.expect, output)

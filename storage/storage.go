@@ -45,8 +45,17 @@ type (
 
 func init() {
 	Register("bitbucket", BitBucket)
+	Register("git", Git)
 	Register("github", GitHub)
 	Register("gs", googleStorage{})
+}
+
+type nopCloser struct {
+	io.Reader
+}
+
+func (n nopCloser) Close() error {
+	return nil
 }
 
 var (
