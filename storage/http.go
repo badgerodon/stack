@@ -57,7 +57,7 @@ func (s httpStorage) Get(loc Location) (io.ReadCloser, error) {
 	}
 
 	res.Body.Close()
-	return nil, fmt.Errorf("bad status: %v", res.Status)
+	return nil, fmt.Errorf("bad status (%v): %v", req, res.Status)
 }
 
 func (s httpStorage) Version(loc Location, previous string) (string, error) {
@@ -77,5 +77,5 @@ func (s httpStorage) Version(loc Location, previous string) (string, error) {
 		return res.Header.Get("ETag"), nil
 	}
 
-	return "", fmt.Errorf("bad status: %v", res.Status)
+	return "", fmt.Errorf("bad status (%v): %v", req, res.Status)
 }

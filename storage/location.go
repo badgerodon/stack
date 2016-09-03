@@ -28,6 +28,15 @@ func (loc Location) Path() string {
 	return loc["path"]
 }
 
+// Query returns query string parameters from the original location
+func (loc Location) Query() url.Values {
+	vs, err := url.ParseQuery(loc["query"])
+	if err != nil {
+		vs = make(url.Values)
+	}
+	return vs
+}
+
 func (loc Location) Type() string {
 	return loc["type"]
 }

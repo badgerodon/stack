@@ -76,7 +76,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "stack"
 	app.Usage = "a simple, cross-platform, open-source, pull-based deployment system"
-	app.Version = "0.4"
+	app.Version = "0.5"
 	app.Author = "Caleb Doxsey"
 	app.Email = "caleb@doxsey.net"
 	app.Commands = []cli.Command{

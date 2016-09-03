@@ -44,6 +44,7 @@ type (
 )
 
 func init() {
+	Register("bitbucket", BitBucket)
 	Register("github", GitHub)
 	Register("gs", googleStorage{})
 }
