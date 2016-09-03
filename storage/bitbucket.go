@@ -16,9 +16,9 @@ func (s bitbucket) Build(loc Location) Location {
 		dup[k] = v
 	}
 	dup["scheme"] = "https"
-	dup["host"] = "bitbucket.org"
+	dup["host"] = "api.bitbucket.org"
 	dup["query"] = ""
-	path := []string{""}
+	path := []string{"", "1.0", "repositories"}
 	if loc.Host() != "" {
 		path = append(path, loc.Host())
 	}
@@ -34,8 +34,8 @@ func (s bitbucket) Build(loc Location) Location {
 		branch = "master"
 	}
 	// inject 'raw/branch'
-	// /owner/repo/raw/branch/path
-	path = append(path[:3], append([]string{"raw", branch}, path[3:]...)...)
+	// https://api.bitbucket.org/1.0/repositories/{accountname}/{repo_slug}/raw/{revision}/{path}
+	path = append(path[:5], append([]string{"raw", branch}, path[5:]...)...)
 	dup["path"] = strings.Join(path, "/")
 	return dup
 }

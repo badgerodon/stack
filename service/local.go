@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"net"
 	"net/rpc"
 	"os"
@@ -24,6 +25,10 @@ func NewLocalServiceManager(stateFile string) *LocalServiceManager {
 		stateFile: stateFile,
 	}
 	return lsm
+}
+
+func (lsm *LocalServiceManager) String() string {
+	return fmt.Sprintf("LocalServiceManager(state-file=%s)", lsm.stateFile)
 }
 
 func (lsm *LocalServiceManager) call(serviceMethod string, args interface{}, reply interface{}) error {

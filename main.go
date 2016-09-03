@@ -123,10 +123,16 @@ func main() {
 					log.Fatalln("config file location is required")
 				}
 
+				log.Println("installing using", serviceManager)
+
 				exeName, err := osext.Executable()
 				if err != nil {
 					log.Fatalln(err)
 				}
+
+				dstName := filepath.Join(rootDir, "stack")
+
+				log.Println("copying", exeName, "to", dstName)
 
 				os.MkdirAll(rootDir, 0755)
 				src, err := os.Open(exeName)
@@ -135,7 +141,7 @@ func main() {
 				}
 				defer src.Close()
 
-				dst, err := os.OpenFile(filepath.Join(rootDir, "stack"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+				dst, err := os.OpenFile(dstName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 				if err != nil {
 					log.Fatalln(err)
 				}

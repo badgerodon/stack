@@ -22,6 +22,11 @@ func NewSystemDServiceManager(unitFilePath string, userMode bool) *SystemDServic
 	return &SystemDServiceManager{unitFilePath, userMode}
 }
 
+func (sdsm *SystemDServiceManager) String() string {
+	return fmt.Sprintf("SystemDServiceManager(unit-files=%s user-mode=%v)",
+		sdsm.unitFilePath, sdsm.userMode)
+}
+
 func (sdsm *SystemDServiceManager) Install(service Service) error {
 	name := service.Name
 	dstPath := filepath.Join(sdsm.unitFilePath, name+".service")

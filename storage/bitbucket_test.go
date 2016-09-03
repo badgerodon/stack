@@ -14,8 +14,8 @@ func TestBitBucket(t *testing.T) {
 			"bitbucket://owner/repo/some/file.txt",
 			Location{
 				"scheme": "https",
-				"host":   "bitbucket.org",
-				"path":   "/owner/repo/raw/master/some/file.txt",
+				"host":   "api.bitbucket.org",
+				"path":   "/1.0/repositories/owner/repo/raw/master/some/file.txt",
 				"query":  "",
 				"type":   "bitbucket",
 			},
@@ -24,8 +24,8 @@ func TestBitBucket(t *testing.T) {
 			"bitbucket://owner/repo/some/file.txt?branch=test",
 			Location{
 				"scheme": "https",
-				"host":   "bitbucket.org",
-				"path":   "/owner/repo/raw/test/some/file.txt",
+				"host":   "api.bitbucket.org",
+				"path":   "/1.0/repositories/owner/repo/raw/test/some/file.txt",
 				"query":  "",
 				"type":   "bitbucket",
 			},
