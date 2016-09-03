@@ -83,16 +83,13 @@ func (s googleStorage) List(loc Location) ([]string, error) {
 	})
 	var names []string
 	for {
-		objects, _, err := it.NextPage()
-		if err != nil && err != storage.Done {
-			return nil, err
-		}
-		for _, object := range objects {
-			names = append(names, object.Name[len(path):])
-		}
+		object, err := it.Next()
 		if err == storage.Done {
 			break
+		} else if err != nil {
+			return nil, err
 		}
+		names = append(names, object.Name[len(path):])
 	}
 	return names, nil
 }
