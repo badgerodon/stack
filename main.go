@@ -125,6 +125,9 @@ func main() {
 
 				log.Println("installing using", serviceManager)
 
+				// uninstall any existing stack service
+				serviceManager.Uninstall("stack")
+
 				exeName, err := osext.Executable()
 				if err != nil {
 					log.Fatalln(err)

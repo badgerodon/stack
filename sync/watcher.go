@@ -44,6 +44,7 @@ func Watch(loc storage.Location) (*Watcher, error) {
 						time.Sleep(time.Minute)
 						continue
 					}
+					log.Printf("[watcher] version: %v\n", next)
 					if previous != next {
 						changed = true
 						previous = next
