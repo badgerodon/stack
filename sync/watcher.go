@@ -9,7 +9,7 @@ import (
 )
 
 // PollInterval is the time in between looking for new versions
-var PollInterval = time.Second * 15
+var PollInterval = time.Second * 60
 
 // A Watcher watches for changes
 type Watcher struct {

@@ -224,25 +224,33 @@ func Validate(state *StackState) {
 		}
 	}
 
+	var applicationsToRemove []string
+	var servicesToRemove []string
+
 	for i := 0; i < len(state.Applications); i++ {
 		a := state.Applications[i]
 		_, foundApplication := existingApplications[a.ApplicationPath()]
 		_, foundService := existingServices[a.ServiceName()]
-		if foundApplication && (foundService || len(a.Service.Command) == 0) {
-			delete(existingApplications, a.ApplicationPath())
-			delete(existingServices, a.ServiceName())
-		} else {
+		if !(foundApplication && foundService && len(a.Service.Command) > 0) {
 			log.Println("[config] removing invalid application", a.Name)
 			copy(state.Applications[i:], state.Applications[i+1:])
 			state.Applications = state.Applications[:len(state.Applications)-1]
 			i--
+
+			if foundApplication {
+				applicationsToRemove = append(applicationsToRemove, a.ApplicationPath())
+			}
+			if foundService {
+				servicesToRemove = append(servicesToRemove, a.ServiceName())
+			}
 		}
 	}
-	for a := range existingApplications {
+
+	for _, a := range applicationsToRemove {
 		log.Println("[config] removing untracked application", a)
 		os.RemoveAll(a)
 	}
-	for s := range existingServices {
+	for _, s := range servicesToRemove {
 		log.Println("[config] removing untracked service", s)
 		serviceManager.Uninstall(s)
 	}
