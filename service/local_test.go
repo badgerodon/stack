@@ -1,34 +1,33 @@
 package service
 
 import (
-	"github.com/satori/go.uuid"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/satori/go.uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLocalServiceManager(t *testing.T) {
 	assert := assert.New(t)
 
-	LocalServiceManagerTickerDuration = time.Millisecond * 500
-
-	writeFilePath := filepath.Join(os.TempDir(), uuid.New()+".txt")
+	writeFilePath := filepath.Join(os.TempDir(), uuid.NewV4().String()+".txt")
 	defer os.Remove(writeFilePath)
 
-	batchFilePath := filepath.Join(os.TempDir(), uuid.New()+".bat")
+	batchFilePath := filepath.Join(os.TempDir(), uuid.NewV4().String()+".bat")
 	defer os.Remove(batchFilePath)
 
 	ioutil.WriteFile(batchFilePath, []byte(`
 echo %time% > `+writeFilePath+`
 `), 0644)
 
-	stateFilePath := filepath.Join(os.TempDir(), uuid.New())
+	stateFilePath := filepath.Join(os.TempDir(), uuid.NewV4().String())
 	defer os.Remove(stateFilePath)
 
-	lsm := NewLocalServiceManager(stateFilePath)
+	lsm := NewLocalManager(stateFilePath)
 	err := lsm.Start()
 	assert.Nil(err)
 

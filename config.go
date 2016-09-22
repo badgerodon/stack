@@ -20,7 +20,7 @@ import (
 )
 
 var rootDir, tmpDir string
-var serviceManager service.ServiceManager
+var serviceManager service.Manager
 
 func isUpstart() bool {
 	bs, err := exec.Command("/sbin/init", "--version").CombinedOutput()
@@ -43,33 +43,33 @@ func init() {
 	switch runtime.GOOS {
 	case "darwin":
 		if isRoot {
-			rootDir = "/opt/badgerodon-stack"
+			rootDir = "/opt/stack"
 		} else {
-			rootDir = filepath.Join(os.Getenv("HOME"), "badgerodon-stack")
+			rootDir = filepath.Join(os.Getenv("HOME"), "stack")
 		}
-		serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.state"))
+		serviceManager = service.NewLocalManager(filepath.Join(rootDir, "services.state"))
 	case "linux":
 		if isRoot {
-			rootDir = "/opt/badgerodon-stack"
+			rootDir = "/opt/stack"
 			if isUpstart() {
 				serviceManager = service.NewUpstartServiceManager()
 			} else if isSystemD() {
 				if _, err := os.Stat("/usr/lib/systemd/system"); err == nil {
-					serviceManager = service.NewSystemDServiceManager("/usr/lib/systemd/system/", false)
+					serviceManager = service.NewSystemDManager("/usr/lib/systemd/system/", false)
 				} else {
-					serviceManager = service.NewSystemDServiceManager("/etc/systemd/system/", false)
+					serviceManager = service.NewSystemDManager("/etc/systemd/system/", false)
 				}
 			} else {
-				serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.state"))
+				serviceManager = service.NewLocalManager(filepath.Join(rootDir, "services.state"))
 			}
 		} else {
-			rootDir = filepath.Join(os.Getenv("HOME"), "badgerodon-stack")
-			serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.state"))
+			rootDir = filepath.Join(os.Getenv("HOME"), "stack")
+			serviceManager = service.NewLocalManager(filepath.Join(rootDir, "services.state"))
 		}
 	case "windows":
 		// TODO: check for access
-		rootDir = "C:\\ProgramData\\badgerodon-stack"
-		serviceManager = service.NewLocalServiceManager(filepath.Join(rootDir, "services.state"))
+		rootDir = "C:\\ProgramData\\stack"
+		serviceManager = service.NewLocalManager(filepath.Join(rootDir, "services.state"))
 	default:
 		panic("unsupported operating system")
 	}
@@ -150,7 +150,7 @@ func (a Application) SourceHash() string {
 }
 
 func (a Application) ServiceName() string {
-	return "badgerodon-stack-" + a.Name
+	return "stack-" + a.Name
 }
 
 func ReadStackState() *StackState {
@@ -176,7 +176,7 @@ func ReadStackState() *StackState {
 }
 
 func SaveStackState(state *StackState) {
-	out, err := json.Marshal(state)
+	out, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		log.Println("[SaveStackState] error marshaling:", err)
 		return

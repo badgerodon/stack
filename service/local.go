@@ -13,25 +13,27 @@ import (
 )
 
 type (
-	LocalServiceManager struct {
+	// A LocalManager manages services with a custom service runner
+	LocalManager struct {
 		stateFile string
 		client    *rpc.Client
 		mu        sync.Mutex
 	}
 )
 
-func NewLocalServiceManager(stateFile string) *LocalServiceManager {
-	lsm := &LocalServiceManager{
+// NewLocalManager creates a new local manager
+func NewLocalManager(stateFile string) *LocalManager {
+	lsm := &LocalManager{
 		stateFile: stateFile,
 	}
 	return lsm
 }
 
-func (lsm *LocalServiceManager) String() string {
-	return fmt.Sprintf("LocalServiceManager(state-file=%s)", lsm.stateFile)
+func (lsm *LocalManager) String() string {
+	return fmt.Sprintf("LocalManager(state-file=%s)", lsm.stateFile)
 }
 
-func (lsm *LocalServiceManager) call(serviceMethod string, args interface{}, reply interface{}) error {
+func (lsm *LocalManager) call(serviceMethod string, args interface{}, reply interface{}) error {
 	lsm.mu.Lock()
 	defer lsm.mu.Unlock()
 
@@ -67,7 +69,8 @@ func (lsm *LocalServiceManager) call(serviceMethod string, args interface{}, rep
 	return lsm.client.Call(serviceMethod, args, reply)
 }
 
-func (lsm *LocalServiceManager) Install(service Service) error {
+// Install installs the service
+func (lsm *LocalManager) Install(service Service) error {
 	req := runner.InstallRequest{
 		Service: runner.Service{
 			Name:        service.Name,
@@ -84,7 +87,8 @@ func (lsm *LocalServiceManager) Install(service Service) error {
 	return nil
 }
 
-func (lsm *LocalServiceManager) Uninstall(name string) error {
+// Uninstall uninstalls the service
+func (lsm *LocalManager) Uninstall(name string) error {
 	req := runner.UninstallRequest{
 		Name: name,
 	}
@@ -96,7 +100,8 @@ func (lsm *LocalServiceManager) Uninstall(name string) error {
 	return nil
 }
 
-func (lsm *LocalServiceManager) List() ([]string, error) {
+// List lists the installed services
+func (lsm *LocalManager) List() ([]string, error) {
 	req := runner.ListRequest{}
 	var res runner.ListResult
 	err := lsm.call("Runner.List", &req, &res)

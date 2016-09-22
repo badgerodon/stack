@@ -1,6 +1,7 @@
 package service
 
 type (
+	// A Service represent a long-lived application
 	Service struct {
 		Name        string
 		Directory   string
@@ -8,7 +9,8 @@ type (
 		Environment map[string]string
 	}
 
-	ServiceManager interface {
+	// A Manager manages services
+	Manager interface {
 		Install(service Service) error
 		Uninstall(serviceName string) error
 		List() ([]string, error)
