@@ -1,0 +1,279 @@
+{
+    "memo": "b03ee41a81578a2ab1a03d279bc1a306fe2fe65c8ee970b24f080e5a8a726ee7",
+    "projects": [
+        {
+            "name": "cloud.google.com/go",
+            "version": "v0.6.0",
+            "revision": "c116c7972ec94f148459a304d07a67ecbc770d4b",
+            "packages": [
+                "compute/metadata",
+                "internal",
+                "internal/optional",
+                "storage"
+            ]
+        },
+        {
+            "name": "github.com/cenkalti/backoff",
+            "version": "v1.0.0",
+            "revision": "32cd0c5b3aef12c76ed64aaf678f6c79736be7dc",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/codegangsta/cli",
+            "version": "v1.19.1",
+            "revision": "0bdeddeeb0f650497d603c4ad7b20cfe685682f6",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/davecgh/go-spew",
+            "version": "v1.1.0",
+            "revision": "a7a0063072ed89d04285d3d3362aa590ed9f7878",
+            "packages": [
+                "spew"
+            ]
+        },
+        {
+            "name": "github.com/goamz/goamz",
+            "branch": "master",
+            "revision": "c35091c30f44b7f151ec9028b895465a191d1ea7",
+            "packages": [
+                "aws",
+                "s3"
+            ]
+        },
+        {
+            "name": "github.com/golang/protobuf",
+            "branch": "master",
+            "revision": "69b215d01a5606c843240eab4937eab3acee6530",
+            "packages": [
+                "proto"
+            ]
+        },
+        {
+            "name": "github.com/googleapis/gax-go",
+            "branch": "master",
+            "revision": "da06d194a00e19ce00d9011a13931c3f6f6887c7",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/kardianos/osext",
+            "branch": "master",
+            "revision": "9b883c5eb462dd5cb1b0a7a104fe86bc6b9bd391",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/minio/blake2b-simd",
+            "branch": "master",
+            "revision": "3f5f724cb5b182a5c278d6d3d55b40e7f8c2efb4",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/pkg/errors",
+            "branch": "master",
+            "revision": "bfd5150e4e41705ded2129ec33379de1cb90b513",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/pmezard/go-difflib",
+            "version": "v1.0.0",
+            "revision": "c0b812dadcf4498dede02bb7f0c5c478be997e34",
+            "packages": [
+                "difflib"
+            ]
+        },
+        {
+            "name": "github.com/satori/go.uuid",
+            "branch": "master",
+            "revision": "b061729afc07e77a8aa4fad0a2fd840958f1942a",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/sergi/go-diff",
+            "branch": "master",
+            "revision": "24e2351369ec4949b2ed0dc5c477afdd4c4034e8",
+            "packages": [
+                "diffmatchpatch"
+            ]
+        },
+        {
+            "name": "github.com/stretchr/testify",
+            "version": "v1.1.4",
+            "revision": "69483b4bd14f5845b5a1e55bca19e954e827f1d0",
+            "packages": [
+                "assert"
+            ]
+        },
+        {
+            "name": "github.com/t3rm1n4l/go-mega",
+            "branch": "master",
+            "revision": "551abb8f1c87053be3f24282d198a6614c0ca14f",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/ulikunitz/xz",
+            "version": "v0.5.3",
+            "revision": "788b87dddaa9905f9c12f778c60468f755aee935",
+            "packages": [
+                ".",
+                "internal/hash",
+                "internal/xlog",
+                "lzma"
+            ]
+        },
+        {
+            "name": "github.com/vaughan0/go-ini",
+            "branch": "master",
+            "revision": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "golang.org/x/crypto",
+            "branch": "master",
+            "revision": "40541ccb1c6e64c947ed6f606b8a6cb4b67d7436",
+            "packages": [
+                "curve25519",
+                "ed25519",
+                "ed25519/internal/edwards25519",
+                "ssh"
+            ]
+        },
+        {
+            "name": "golang.org/x/net",
+            "branch": "master",
+            "revision": "906cda9512f77671ab44f8c8563b13a8e707b230",
+            "packages": [
+                "context",
+                "context/ctxhttp",
+                "http2",
+                "http2/hpack",
+                "idna",
+                "internal/timeseries",
+                "lex/httplex",
+                "trace"
+            ]
+        },
+        {
+            "name": "golang.org/x/oauth2",
+            "branch": "master",
+            "revision": "efb10a30610e617dbb17fc243f4cc61a8cfa2903",
+            "packages": [
+                ".",
+                "google",
+                "internal",
+                "jws",
+                "jwt"
+            ]
+        },
+        {
+            "name": "google.golang.org/api",
+            "branch": "master",
+            "revision": "f786854525c2e5b0b49c2a301b0ff076d2ae20df",
+            "packages": [
+                "drive/v2",
+                "gensupport",
+                "googleapi",
+                "googleapi/internal/uritemplates",
+                "googleapi/transport",
+                "internal",
+                "iterator",
+                "option",
+                "storage/v1",
+                "transport"
+            ]
+        },
+        {
+            "name": "google.golang.org/appengine",
+            "version": "v1.0.0",
+            "revision": "150dc57a1b433e64154302bdc40b6bb8aefa313a",
+            "packages": [
+                ".",
+                "internal",
+                "internal/app_identity",
+                "internal/base",
+                "internal/datastore",
+                "internal/log",
+                "internal/modules",
+                "internal/remote_api",
+                "internal/socket",
+                "internal/urlfetch",
+                "socket",
+                "urlfetch"
+            ]
+        },
+        {
+            "name": "google.golang.org/grpc",
+            "version": "v1.0.5",
+            "revision": "708a7f9f3283aa2d4f6132d287d78683babe55c8",
+            "packages": [
+                ".",
+                "codes",
+                "credentials",
+                "credentials/oauth",
+                "grpclog",
+                "internal",
+                "metadata",
+                "naming",
+                "peer",
+                "stats",
+                "tap",
+                "transport"
+            ]
+        },
+        {
+            "name": "gopkg.in/sourcegraph/go-vcsurl.v1",
+            "version": "v1",
+            "revision": "6b12603ea6fd7f84b8c90118face09df39ea10c6",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "gopkg.in/src-d/go-git.v3",
+            "version": "v3.2.0",
+            "revision": "02c228585e543413479ea36d3a2bbc80a070eb93",
+            "packages": [
+                ".",
+                "clients",
+                "clients/common",
+                "clients/http",
+                "clients/ssh",
+                "core",
+                "diff",
+                "formats/idxfile",
+                "formats/packfile",
+                "formats/pktline",
+                "storage/memory",
+                "storage/seekable",
+                "storage/seekable/internal/gitdir",
+                "storage/seekable/internal/index",
+                "utils/fs"
+            ]
+        },
+        {
+            "name": "gopkg.in/yaml.v2",
+            "branch": "v2",
+            "revision": "a3f3340b5840cee44f372bddb5880fcbc419b46a",
+            "packages": [
+                "."
+            ]
+        }
+    ]
+}

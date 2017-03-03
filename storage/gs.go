@@ -9,6 +9,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
@@ -84,7 +85,8 @@ func (s googleStorage) List(loc Location) ([]string, error) {
 	var names []string
 	for {
 		object, err := it.Next()
-		if err == storage.Done {
+
+		if err == iterator.Done {
 			break
 		} else if err != nil {
 			return nil, err
