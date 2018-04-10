@@ -41,7 +41,7 @@ func bytes_to_a32(b []byte) []uint32 {
 	a := make([]uint32, length/4)
 	buf := bytes.NewBuffer(b)
 	for i, _ := range a {
-		binary.Read(buf, binary.BigEndian, &a[i])
+		_ = binary.Read(buf, binary.BigEndian, &a[i])
 	}
 
 	return a
@@ -53,7 +53,7 @@ func a32_to_bytes(a []uint32) []byte {
 	buf := new(bytes.Buffer)
 	buf.Grow(len(a) * 4) // To prevent reallocations in Write
 	for _, v := range a {
-		binary.Write(buf, binary.BigEndian, v)
+		_ = binary.Write(buf, binary.BigEndian, v)
 	}
 
 	return buf.Bytes()
@@ -229,11 +229,14 @@ func blockEncrypt(blk cipher.Block, dst, src []byte) error {
 
 // decryptSeessionId decrypts the session id using the given private
 // key.
-func decryptSessionId(privk []byte, csid []byte, mk []byte) []byte {
+func decryptSessionId(privk []byte, csid []byte, mk []byte) ([]byte, error) {
 
 	block, _ := aes.NewCipher(mk)
 	pk := base64urldecode(privk)
-	blockDecrypt(block, pk, pk)
+	err := blockDecrypt(block, pk, pk)
+	if err != nil {
+		return nil, err
+	}
 
 	c := base64urldecode(csid)
 
@@ -242,42 +245,41 @@ func decryptSessionId(privk []byte, csid []byte, mk []byte) []byte {
 	p, q, d := getRSAKey(pk)
 	r := decryptRSA(m, p, q, d)
 
-	return base64urlencode(r[:43])
+	return base64urlencode(r[:43]), nil
 
 }
 
-func getChunkSizes(size int) map[int]int {
-	chunks := make(map[int]int)
-	p, pp := 0, 0
-	// i = 0 loop is useless
-	for i := 1; i <= 8 && p < size-i*131072; i++ {
-		chunks[p] = i * 131072
-		pp = p
-		p += chunks[p]
-	}
+// chunkSize describes a size and position of chunk
+type chunkSize struct {
+	position int64
+	size     int
+}
 
-	for p < size {
-		chunks[p] = 1048576
-		pp = p
-		p += chunks[p]
+func getChunkSizes(size int64) (chunks []chunkSize) {
+	p := int64(0)
+	for i := 1; size > 0; i++ {
+		var chunk int
+		if i <= 8 {
+			chunk = i * 131072
+		} else {
+			chunk = 1048576
+		}
+		if size < int64(chunk) {
+			chunk = int(size)
+		}
+		chunks = append(chunks, chunkSize{position: p, size: chunk})
+		p += int64(chunk)
+		size -= int64(chunk)
 	}
-
-	chunks[pp] = size - pp
-	// Is this even possible? I think pp == size is never possible for
-	// any size > 0.
-	if chunks[pp] == 0 {
-		delete(chunks, pp)
-	}
-
 	return chunks
 }
 
 func decryptAttr(key []byte, data []byte) (attr FileAttr, err error) {
 	err = EBADATTR
-	defer func() {
-		recover()
-	}()
-	block, _ := aes.NewCipher(key)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return attr, err
+	}
 	iv := a32_to_bytes([]uint32{0, 0, 0, 0})
 	mode := cipher.NewCBCDecrypter(block, iv)
 	buf := make([]byte, len(data))
@@ -287,16 +289,19 @@ func decryptAttr(key []byte, data []byte) (attr FileAttr, err error) {
 		str := strings.TrimRight(string(buf[4:]), "\x00")
 		err = json.Unmarshal([]byte(str), &attr)
 	}
-	return
+	return attr, err
 }
 
 func encryptAttr(key []byte, attr FileAttr) (b []byte, err error) {
 	err = EBADATTR
-	defer func() {
-		recover()
-	}()
-	block, _ := aes.NewCipher(key)
-	data, _ := json.Marshal(attr)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(attr)
+	if err != nil {
+		return nil, err
+	}
 	attrib := []byte("MEGA")
 	attrib = append(attrib, data...)
 	attrib = paddnull(attrib, 16)
@@ -306,17 +311,19 @@ func encryptAttr(key []byte, attr FileAttr) (b []byte, err error) {
 	mode.CryptBlocks(attrib, attrib)
 
 	b = base64urlencode(attrib)
-	err = nil
-	return
+	return b, nil
 }
 
-func randString(l int) string {
+func randString(l int) (string, error) {
 	encoding := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789AB"
 	b := make([]byte, l)
-	rand.Read(b)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
 	enc := base64.NewEncoding(encoding)
 	d := make([]byte, enc.EncodedLen(len(b)))
 	enc.Encode(d, b)
 	d = d[:l]
-	return string(d)
+	return string(d), nil
 }

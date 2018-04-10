@@ -8,19 +8,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
 	"math/big"
 	mrand "math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 )
-
-var client *http.Client
 
 // Default settings
 const (
@@ -104,6 +103,11 @@ type Mega struct {
 	uh []byte
 	// Filesystem object
 	FS *MegaFS
+	// HTTP Client
+	client *http.Client
+	// Loggers
+	logf   func(format string, v ...interface{})
+	debugf func(format string, v ...interface{})
 }
 
 // Filesystem node types
@@ -117,6 +121,7 @@ const (
 
 // Filesystem node
 type Node struct {
+	fs       *MegaFS
 	name     string
 	hash     string
 	parent   *Node
@@ -151,27 +156,37 @@ func (n *Node) addChild(c *Node) {
 	}
 }
 
-func (n Node) getChildren() []*Node {
+func (n *Node) getChildren() []*Node {
 	return n.children
 }
 
-func (n Node) GetType() int {
+func (n *Node) GetType() int {
+	n.fs.mutex.Lock()
+	defer n.fs.mutex.Unlock()
 	return n.ntype
 }
 
-func (n Node) GetSize() int64 {
+func (n *Node) GetSize() int64 {
+	n.fs.mutex.Lock()
+	defer n.fs.mutex.Unlock()
 	return n.size
 }
 
-func (n Node) GetTimeStamp() time.Time {
+func (n *Node) GetTimeStamp() time.Time {
+	n.fs.mutex.Lock()
+	defer n.fs.mutex.Unlock()
 	return n.ts
 }
 
-func (n Node) GetName() string {
+func (n *Node) GetName() string {
+	n.fs.mutex.Lock()
+	defer n.fs.mutex.Unlock()
 	return n.name
 }
 
-func (n Node) GetHash() string {
+func (n *Node) GetHash() string {
+	n.fs.mutex.Lock()
+	defer n.fs.mutex.Unlock()
 	return n.hash
 }
 
@@ -194,35 +209,35 @@ type MegaFS struct {
 }
 
 // Get filesystem root node
-func (fs MegaFS) GetRoot() *Node {
+func (fs *MegaFS) GetRoot() *Node {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 	return fs.root
 }
 
 // Get filesystem trash node
-func (fs MegaFS) GetTrash() *Node {
+func (fs *MegaFS) GetTrash() *Node {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 	return fs.trash
 }
 
 // Get inbox node
-func (fs MegaFS) GetInbox() *Node {
+func (fs *MegaFS) GetInbox() *Node {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 	return fs.inbox
 }
 
 // Get a node pointer from its hash
-func (fs MegaFS) HashLookup(h string) *Node {
+func (fs *MegaFS) HashLookup(h string) *Node {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
 	return fs.hashLookup(h)
 }
 
-func (fs MegaFS) hashLookup(h string) *Node {
+func (fs *MegaFS) hashLookup(h string) *Node {
 	if node, ok := fs.lookup[h]; ok {
 		return node
 	}
@@ -231,7 +246,7 @@ func (fs MegaFS) hashLookup(h string) *Node {
 }
 
 // Get the list of child nodes for a given node
-func (fs MegaFS) GetChildren(n *Node) ([]*Node, error) {
+func (fs *MegaFS) GetChildren(n *Node) ([]*Node, error) {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
@@ -252,7 +267,7 @@ func (fs MegaFS) GetChildren(n *Node) ([]*Node, error) {
 // Retreive all the nodes in the given node tree path by name
 // This method returns array of nodes upto the matched subpath
 // (in same order as input names array) even if the target node is not located.
-func (fs MegaFS) PathLookup(root *Node, ns []string) ([]*Node, error) {
+func (fs *MegaFS) PathLookup(root *Node, ns []string) ([]*Node, error) {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
@@ -290,7 +305,7 @@ func (fs MegaFS) PathLookup(root *Node, ns []string) ([]*Node, error) {
 }
 
 // Get top level directory nodes shared by other users
-func (fs MegaFS) GetSharedRoots() []*Node {
+func (fs *MegaFS) GetSharedRoots() []*Node {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 	return fs.sroots
@@ -308,13 +323,45 @@ func New() *Mega {
 	max := big.NewInt(0x100000000)
 	bigx, _ := rand.Int(rand.Reader, max)
 	cfg := newConfig()
-	client = newHttpClient(cfg.timeout)
 	mgfs := newMegaFS()
 	m := &Mega{
 		config: cfg,
 		sn:     bigx.Int64(),
 		FS:     mgfs,
+		client: newHttpClient(cfg.timeout),
 	}
+	m.SetLogger(log.Printf)
+	m.SetDebugger(nil)
+	return m
+}
+
+// SetClient sets the HTTP client in use
+func (m *Mega) SetClient(client *http.Client) *Mega {
+	m.client = client
+	return m
+}
+
+// discardLogf discards the log messages
+func discardLogf(format string, v ...interface{}) {
+}
+
+// SetLogger sets the logger for important messages.  By default this
+// is log.Printf.  Use nil to discard the messages.
+func (m *Mega) SetLogger(logf func(format string, v ...interface{})) *Mega {
+	if logf == nil {
+		logf = discardLogf
+	}
+	m.logf = logf
+	return m
+}
+
+// SetDebugger sets the logger for debug messages.  By default these
+// messages are not output.
+func (m *Mega) SetDebugger(debugf func(format string, v ...interface{})) *Mega {
+	if debugf == nil {
+		debugf = discardLogf
+	}
+	m.debugf = debugf
 	return m
 }
 
@@ -335,12 +382,12 @@ func (m *Mega) api_request(r []byte) ([]byte, error) {
 	}
 
 	for i := 0; i < m.retries+1; i++ {
-		resp, err = client.Post(url, "application/json", bytes.NewBuffer(r))
+		resp, err = m.client.Post(url, "application/json", bytes.NewBuffer(r))
 		if err == nil {
 			if resp.StatusCode == 200 {
 				goto success
 			} else {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 
 			err = errors.New("Http Status:" + resp.Status)
@@ -352,7 +399,10 @@ func (m *Mega) api_request(r []byte) ([]byte, error) {
 
 	success:
 		buf, _ = ioutil.ReadAll(resp.Body)
-		resp.Body.Close()
+		err = resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
 
 		if bytes.HasPrefix(buf, []byte("[")) == false && bytes.HasPrefix(buf, []byte("-")) == false {
 			return nil, EBADRESP
@@ -415,8 +465,7 @@ func (m *Mega) Login(email string, passwd string) error {
 	m.k = base64urldecode([]byte(res[0].Key))
 	cipher, err := aes.NewCipher(passkey)
 	cipher.Decrypt(m.k, m.k)
-	m.sid = decryptSessionId([]byte(res[0].Privk), []byte(res[0].Csid), m.k)
-
+	m.sid, err = decryptSessionId([]byte(res[0].Privk), []byte(res[0].Csid), m.k)
 	if err != nil {
 		return err
 	}
@@ -427,7 +476,7 @@ func (m *Mega) Login(email string, passwd string) error {
 }
 
 // Get user information
-func (m Mega) GetUser() (UserResp, error) {
+func (m *Mega) GetUser() (UserResp, error) {
 	var msg [1]UserMsg
 	var res [1]UserResp
 
@@ -461,26 +510,41 @@ func (m *Mega) addFSNode(itm FSNode) (*Node, error) {
 		// File or folder owned by current user
 		case args[0] == itm.User:
 			buf := base64urldecode([]byte(args[1]))
-			blockDecrypt(master_aes, buf, buf)
+			err = blockDecrypt(master_aes, buf, buf)
+			if err != nil {
+				return nil, err
+			}
 			compkey = bytes_to_a32(buf)
 			// Shared folder
 		case itm.SUser != "" && itm.SKey != "":
 			sk := base64urldecode([]byte(itm.SKey))
-			blockDecrypt(master_aes, sk, sk)
+			err = blockDecrypt(master_aes, sk, sk)
+			if err != nil {
+				return nil, err
+			}
 			sk_aes, _ := aes.NewCipher(sk)
 
 			m.FS.skmap[itm.Hash] = itm.SKey
 			buf := base64urldecode([]byte(args[1]))
-			blockDecrypt(sk_aes, buf, buf)
+			err = blockDecrypt(sk_aes, buf, buf)
+			if err != nil {
+				return nil, err
+			}
 			compkey = bytes_to_a32(buf)
 			// Shared file
 		default:
 			k := m.FS.skmap[args[0]]
 			b := base64urldecode([]byte(k))
-			blockDecrypt(master_aes, b, b)
+			err = blockDecrypt(master_aes, b, b)
+			if err != nil {
+				return nil, err
+			}
 			block, _ := aes.NewCipher(b)
 			buf := base64urldecode([]byte(args[1]))
-			blockDecrypt(block, buf, buf)
+			err = blockDecrypt(block, buf, buf)
+			if err != nil {
+				return nil, err
+			}
 			compkey = bytes_to_a32(buf)
 		}
 
@@ -504,6 +568,7 @@ func (m *Mega) addFSNode(itm FSNode) (*Node, error) {
 		node = n
 	default:
 		node = &Node{
+			fs:    m.FS,
 			ntype: itm.T,
 			size:  itm.Sz,
 			ts:    time.Unix(itm.Ts, 0),
@@ -522,6 +587,7 @@ func (m *Mega) addFSNode(itm FSNode) (*Node, error) {
 		parent = nil
 		if itm.Parent != "" {
 			parent = &Node{
+				fs:       m.FS,
 				children: []*Node{node},
 				ntype:    FOLDER,
 			}
@@ -594,7 +660,10 @@ func (m *Mega) getFileSystem() error {
 	}
 
 	for _, itm := range res[0].F {
-		m.addFSNode(itm)
+		_, err = m.addFSNode(itm)
+		if err != nil {
+			return err
+		}
 	}
 
 	m.ssn = res[0].Sn
@@ -604,69 +673,218 @@ func (m *Mega) getFileSystem() error {
 	return nil
 }
 
-// Download file from filesystem
-func (m Mega) DownloadFile(src *Node, dstpath string, progress *chan int) error {
-	m.FS.mutex.Lock()
-	defer m.FS.mutex.Unlock()
+// Download contains the internal state of a download
+type Download struct {
+	m           *Mega
+	src         *Node
+	resourceUrl string
+	aes_block   cipher.Block
+	iv          []byte
+	mac_data    []byte
+	mac_enc     cipher.BlockMode
+	mutex       sync.Mutex // to protect the following
+	chunks      []chunkSize
+	chunk_macs  [][]byte
+}
 
-	defer func() {
-		if progress != nil {
-			close(*progress)
-		}
-	}()
-
+// Create a new Download from the src Node
+//
+// Call Chunks to find out how many chunks there are, then for id =
+// 0..chunks-1 call DownloadChunk.  Finally call Finish() to receive
+// the error status.
+func (m *Mega) NewDownload(src *Node) (*Download, error) {
 	if src == nil {
-		return EARGS
+		return nil, EARGS
 	}
 
 	var msg [1]DownloadMsg
 	var res [1]DownloadResp
-	var outfile *os.File
-	var mutex sync.Mutex
-
-	_, err := os.Stat(dstpath)
-	if os.IsExist(err) {
-		os.Remove(dstpath)
-	}
-
-	outfile, err = os.OpenFile(dstpath, os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return err
-	}
 
 	msg[0].Cmd = "g"
 	msg[0].G = 1
 	msg[0].N = src.hash
 
-	request, _ := json.Marshal(msg)
+	request, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
 	result, err := m.api_request(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = json.Unmarshal(result, &res)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	resourceUrl := res[0].G
 
 	_, err = decryptAttr(src.meta.key, []byte(res[0].Attr))
+	if err != nil {
+		return nil, err
+	}
 
-	aes_block, _ := aes.NewCipher(src.meta.key)
+	chunks := getChunkSizes(int64(res[0].Size))
+
+	aes_block, err := aes.NewCipher(src.meta.key)
+	if err != nil {
+		return nil, err
+	}
 
 	mac_data := a32_to_bytes([]uint32{0, 0, 0, 0})
 	mac_enc := cipher.NewCBCEncrypter(aes_block, mac_data)
 	t := bytes_to_a32(src.meta.iv)
 	iv := a32_to_bytes([]uint32{t[0], t[1], t[0], t[1]})
 
-	sorted_chunks := []int{}
-	chunks := getChunkSizes(int(res[0].Size))
-	chunk_macs := make([][]byte, len(chunks))
-
-	for k, _ := range chunks {
-		sorted_chunks = append(sorted_chunks, k)
+	d := &Download{
+		m:           m,
+		src:         src,
+		resourceUrl: res[0].G,
+		aes_block:   aes_block,
+		iv:          iv,
+		mac_data:    mac_data,
+		mac_enc:     mac_enc,
+		chunks:      chunks,
+		chunk_macs:  make([][]byte, len(chunks)),
 	}
-	sort.Ints(sorted_chunks)
+	return d, nil
+}
+
+// Chunks returns The number of chunks in the download.
+func (d *Download) Chunks() int {
+	return len(d.chunks)
+}
+
+// ChunkLocation returns the position in the file and the size of the chunk
+func (d *Download) ChunkLocation(id int) (position int64, size int, err error) {
+	if id < 0 || id >= len(d.chunks) {
+		return 0, 0, EARGS
+	}
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	return d.chunks[id].position, d.chunks[id].size, nil
+}
+
+// DownloadChunk gets a chunk with the given number and update the
+// mac, returning the position in the file of the chunk
+func (d *Download) DownloadChunk(id int) (chunk []byte, err error) {
+	if id < 0 || id >= len(d.chunks) {
+		return nil, EARGS
+	}
+
+	chk_start, chk_size, err := d.ChunkLocation(id)
+	if err != nil {
+		return nil, err
+	}
+
+	var resource *http.Response
+	chunk_url := fmt.Sprintf("%s/%d-%d", d.resourceUrl, chk_start, chk_start+int64(chk_size)-1)
+	for retry := 0; retry < d.m.retries+1; retry++ {
+		resource, err = d.m.client.Get(chunk_url)
+		if err == nil {
+			if resource.StatusCode == 200 {
+				break
+			} else {
+				_ = resource.Body.Close()
+			}
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if resource == nil {
+		return nil, errors.New("retries exceeded")
+	}
+
+	chunk, err = ioutil.ReadAll(resource.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = resource.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(chunk) != chk_size {
+		return nil, errors.New("wrong size for downloaded chunk")
+	}
+
+	// Decrypt the block
+	ctr_iv := bytes_to_a32(d.src.meta.iv)
+	ctr_iv[2] = uint32(uint64(chk_start) / 0x1000000000)
+	ctr_iv[3] = uint32(chk_start / 0x10)
+	ctr_aes := cipher.NewCTR(d.aes_block, a32_to_bytes(ctr_iv))
+	ctr_aes.XORKeyStream(chunk, chunk)
+
+	// Update the chunk_macs
+	enc := cipher.NewCBCEncrypter(d.aes_block, d.iv)
+	i := 0
+	block := make([]byte, 16)
+	paddedChunk := paddnull(chunk, 16)
+	for i = 0; i < len(paddedChunk); i += 16 {
+		enc.CryptBlocks(block, paddedChunk[i:i+16])
+	}
+
+	d.mutex.Lock()
+	if len(d.chunk_macs) > 0 {
+		d.chunk_macs[id] = make([]byte, 16)
+		copy(d.chunk_macs[id], block)
+	}
+	d.mutex.Unlock()
+
+	return chunk, nil
+}
+
+// Finish checks the accumulated MAC for each block.
+//
+// If all the chunks weren't downloaded then it will just return nil
+func (d *Download) Finish() (err error) {
+	// Can't check a 0 sized file
+	if len(d.chunk_macs) == 0 {
+		return nil
+	}
+	for _, v := range d.chunk_macs {
+		// If a chunk_macs hasn't been set then the whole file
+		// wasn't downloaded and we can't check it
+		if v == nil {
+			return nil
+		}
+		d.mac_enc.CryptBlocks(d.mac_data, v)
+	}
+
+	tmac := bytes_to_a32(d.mac_data)
+	if bytes.Equal(a32_to_bytes([]uint32{tmac[0] ^ tmac[1], tmac[2] ^ tmac[3]}), d.src.meta.mac) == false {
+		return EMACMISMATCH
+	}
+
+	return nil
+}
+
+// Download file from filesystem reporting progress if not nil
+func (m *Mega) DownloadFile(src *Node, dstpath string, progress *chan int) error {
+	defer func() {
+		if progress != nil {
+			close(*progress)
+		}
+	}()
+
+	d, err := m.NewDownload(src)
+	if err != nil {
+		return err
+	}
+
+	_, err = os.Stat(dstpath)
+	if os.IsExist(err) {
+		err = os.Remove(dstpath)
+		if err != nil {
+			return err
+		}
+	}
+
+	outfile, err := os.OpenFile(dstpath, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
 
 	workch := make(chan int)
 	errch := make(chan error, m.dl_workers)
@@ -681,62 +899,26 @@ func (m Mega) DownloadFile(src *Node, dstpath string, progress *chan int) error 
 
 			// Wait for work blocked on channel
 			for id := range workch {
-				var resource *http.Response
-				var err error
-				mutex.Lock()
-				chk_start := sorted_chunks[id]
-				chk_size := chunks[chk_start]
-				mutex.Unlock()
-				chunk_url := fmt.Sprintf("%s/%d-%d", resourceUrl, chk_start, chk_start+chk_size-1)
-				for retry := 0; retry < m.retries+1; retry++ {
-					resource, err = client.Get(chunk_url)
-					if err == nil {
-						if resource.StatusCode == 200 {
-							break
-						} else {
-							resource.Body.Close()
-						}
-					}
-				}
-
-				var ctr_iv []uint32
-				var ctr_aes cipher.Stream
-				var chunk []byte
-
-				if err == nil {
-					ctr_iv = bytes_to_a32(src.meta.iv)
-					ctr_iv[2] = uint32(uint64(chk_start) / 0x1000000000)
-					ctr_iv[3] = uint32(chk_start / 0x10)
-					ctr_aes = cipher.NewCTR(aes_block, a32_to_bytes(ctr_iv))
-					chunk, err = ioutil.ReadAll(resource.Body)
-				}
-
+				chunk, err := d.DownloadChunk(id)
 				if err != nil {
 					errch <- err
 					return
 				}
-				resource.Body.Close()
-				ctr_aes.XORKeyStream(chunk, chunk)
-				outfile.WriteAt(chunk, int64(chk_start))
 
-				enc := cipher.NewCBCEncrypter(aes_block, iv)
-				i := 0
-				block := []byte{}
-				chunk = paddnull(chunk, 16)
-				for i = 0; i < len(chunk); i += 16 {
-					block = chunk[i : i+16]
-					enc.CryptBlocks(block, block)
+				chk_start, _, err := d.ChunkLocation(id)
+				if err != nil {
+					errch <- err
+					return
 				}
 
-				mutex.Lock()
-				if len(chunk_macs) > 0 {
-					chunk_macs[id] = make([]byte, 16)
-					copy(chunk_macs[id], block)
+				_, err = outfile.WriteAt(chunk, chk_start)
+				if err != nil {
+					errch <- err
+					return
 				}
-				mutex.Unlock()
 
 				if progress != nil {
-					*progress <- chk_size
+					*progress <- len(chunk)
 				}
 			}
 		}()
@@ -744,7 +926,7 @@ func (m Mega) DownloadFile(src *Node, dstpath string, progress *chan int) error 
 
 	// Place chunk download jobs to chan
 	err = nil
-	for id := 0; id < len(chunks) && err == nil; {
+	for id := 0; id < d.Chunks() && err == nil; {
 		select {
 		case workch <- id:
 			id++
@@ -755,63 +937,58 @@ func (m Mega) DownloadFile(src *Node, dstpath string, progress *chan int) error 
 
 	wg.Wait()
 
+	closeErr := outfile.Close()
 	if err != nil {
-		os.Remove(dstpath)
+		_ = os.Remove(dstpath)
 		return err
 	}
-
-	for _, v := range chunk_macs {
-		mac_enc.CryptBlocks(mac_data, v)
+	if closeErr != nil {
+		return closeErr
 	}
 
-	outfile.Close()
-	tmac := bytes_to_a32(mac_data)
-	if bytes.Equal(a32_to_bytes([]uint32{tmac[0] ^ tmac[1], tmac[2] ^ tmac[3]}), src.meta.mac) == false {
-		return EMACMISMATCH
-	}
-
-	return nil
+	return d.Finish()
 }
 
-// Upload a file to the filesystem
-func (m *Mega) UploadFile(srcpath string, parent *Node, name string, progress *chan int) (*Node, error) {
-	m.FS.mutex.Lock()
-	defer m.FS.mutex.Unlock()
+// Upload contains the internal state of a upload
+type Upload struct {
+	m                 *Mega
+	parenthash        string
+	name              string
+	uploadUrl         string
+	aes_block         cipher.Block
+	iv                []byte
+	kiv               []byte
+	mac_data          []byte
+	mac_enc           cipher.BlockMode
+	kbytes            []byte
+	ukey              []uint32
+	mutex             sync.Mutex // to protect the following
+	chunks            []chunkSize
+	chunk_macs        [][]byte
+	completion_handle []byte
+}
 
-	defer func() {
-		if progress != nil {
-			close(*progress)
-		}
-	}()
-
+// Create a new Upload of name into parent of fileSize
+//
+// Call Chunks to find out how many chunks there are, then for id =
+// 0..chunks-1 Call ChunkLocation then UploadChunk.  Finally call
+// Finish() to receive the error status and the *Node.
+func (m *Mega) NewUpload(parent *Node, name string, fileSize int64) (*Upload, error) {
 	if parent == nil {
 		return nil, EARGS
 	}
 
 	var msg [1]UploadMsg
 	var res [1]UploadResp
-	var cmsg [1]UploadCompleteMsg
-	var cres [1]UploadCompleteResp
-	var infile *os.File
-	var fileSize int64
-	var mutex sync.Mutex
-
 	parenthash := parent.hash
-	info, err := os.Stat(srcpath)
-	if err == nil {
-		fileSize = info.Size()
-	}
-
-	infile, err = os.OpenFile(srcpath, os.O_RDONLY, 0666)
-	if err != nil {
-		return nil, err
-	}
 
 	msg[0].Cmd = "u"
 	msg[0].S = fileSize
-	completion_handle := []byte{}
 
-	request, _ := json.Marshal(msg)
+	request, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
 	result, err := m.api_request(request)
 	if err != nil {
 		return nil, err
@@ -837,14 +1014,209 @@ func (m *Mega) UploadFile(srcpath string, parent *Node, name string, progress *c
 	mac_enc := cipher.NewCBCEncrypter(aes_block, mac_data)
 	iv := a32_to_bytes([]uint32{ukey[4], ukey[5], ukey[4], ukey[5]})
 
-	sorted_chunks := []int{}
-	chunks := getChunkSizes(int(fileSize))
-	chunk_macs := make([][]byte, len(chunks))
+	chunks := getChunkSizes(fileSize)
 
-	for k, _ := range chunks {
-		sorted_chunks = append(sorted_chunks, k)
+	// File size is zero
+	// Do one empty request to get the completion handle
+	if len(chunks) == 0 {
+		chunks = append(chunks, chunkSize{position: 0, size: 0})
 	}
-	sort.Ints(sorted_chunks)
+
+	u := &Upload{
+		m:                 m,
+		parenthash:        parenthash,
+		name:              name,
+		uploadUrl:         uploadUrl,
+		aes_block:         aes_block,
+		iv:                iv,
+		kiv:               kiv,
+		mac_data:          mac_data,
+		mac_enc:           mac_enc,
+		kbytes:            kbytes,
+		ukey:              ukey,
+		chunks:            chunks,
+		chunk_macs:        make([][]byte, len(chunks)),
+		completion_handle: []byte{},
+	}
+	return u, nil
+}
+
+// Chunks returns The number of chunks in the upload.
+func (u *Upload) Chunks() int {
+	return len(u.chunks)
+}
+
+// ChunkLocation returns the position in the file and the size of the chunk
+func (u *Upload) ChunkLocation(id int) (position int64, size int, err error) {
+	if id < 0 || id >= len(u.chunks) {
+		return 0, 0, EARGS
+	}
+	return u.chunks[id].position, u.chunks[id].size, nil
+}
+
+// UploadChunk uploads the chunk of id
+func (u *Upload) UploadChunk(id int, chunk []byte) (err error) {
+	chk_start, chk_size, err := u.ChunkLocation(id)
+	if err != nil {
+		return err
+	}
+	if len(chunk) != chk_size {
+		return errors.New("upload chunk is wrong size")
+	}
+	ctr_iv := bytes_to_a32(u.kiv)
+	ctr_iv[2] = uint32(uint64(chk_start) / 0x1000000000)
+	ctr_iv[3] = uint32(chk_start / 0x10)
+	ctr_aes := cipher.NewCTR(u.aes_block, a32_to_bytes(ctr_iv))
+
+	enc := cipher.NewCBCEncrypter(u.aes_block, u.iv)
+
+	i := 0
+	block := make([]byte, 16)
+	paddedchunk := paddnull(chunk, 16)
+	for i = 0; i < len(paddedchunk); i += 16 {
+		copy(block[0:16], paddedchunk[i:i+16])
+		enc.CryptBlocks(block, block)
+	}
+
+	u.mutex.Lock()
+	if len(u.chunk_macs) > 0 {
+		u.chunk_macs[id] = make([]byte, 16)
+		copy(u.chunk_macs[id], block)
+	}
+	u.mutex.Unlock()
+
+	var rsp *http.Response
+	ctr_aes.XORKeyStream(chunk, chunk)
+	chk_url := fmt.Sprintf("%s/%d", u.uploadUrl, chk_start)
+	reader := bytes.NewBuffer(chunk)
+	req, _ := http.NewRequest("POST", chk_url, reader)
+
+	chunk_resp := []byte{}
+	for retry := 0; retry < u.m.retries+1; retry++ {
+		rsp, err = u.m.client.Do(req)
+		if err == nil {
+			if rsp.StatusCode == 200 {
+				break
+			} else {
+				_ = rsp.Body.Close()
+			}
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if rsp == nil {
+		return errors.New("retries exceeded")
+	}
+
+	chunk_resp, err = ioutil.ReadAll(rsp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = rsp.Body.Close()
+	if err != nil {
+		return err
+	}
+
+	if bytes.Equal(chunk_resp, nil) == false {
+		u.mutex.Lock()
+		u.completion_handle = chunk_resp
+		u.mutex.Unlock()
+	}
+
+	return nil
+}
+
+// Finish completes the upload and returns the created node
+func (u *Upload) Finish() (node *Node, err error) {
+	for _, v := range u.chunk_macs {
+		u.mac_enc.CryptBlocks(u.mac_data, v)
+	}
+
+	t := bytes_to_a32(u.mac_data)
+	meta_mac := []uint32{t[0] ^ t[1], t[2] ^ t[3]}
+
+	attr := FileAttr{u.name}
+
+	attr_data, err := encryptAttr(u.kbytes, attr)
+	if err != nil {
+		return nil, err
+	}
+
+	key := []uint32{u.ukey[0] ^ u.ukey[4], u.ukey[1] ^ u.ukey[5],
+		u.ukey[2] ^ meta_mac[0], u.ukey[3] ^ meta_mac[1],
+		u.ukey[4], u.ukey[5], meta_mac[0], meta_mac[1]}
+
+	buf := a32_to_bytes(key)
+	master_aes, err := aes.NewCipher(u.m.k)
+	if err != nil {
+		return nil, err
+	}
+	iv := a32_to_bytes([]uint32{0, 0, 0, 0})
+	enc := cipher.NewCBCEncrypter(master_aes, iv)
+	enc.CryptBlocks(buf[:16], buf[:16])
+	enc = cipher.NewCBCEncrypter(master_aes, iv)
+	enc.CryptBlocks(buf[16:], buf[16:])
+
+	var cmsg [1]UploadCompleteMsg
+	var cres [1]UploadCompleteResp
+
+	cmsg[0].Cmd = "p"
+	cmsg[0].T = u.parenthash
+	cmsg[0].N[0].H = string(u.completion_handle)
+	cmsg[0].N[0].T = FILE
+	cmsg[0].N[0].A = string(attr_data)
+	cmsg[0].N[0].K = string(base64urlencode(buf))
+
+	request, err := json.Marshal(cmsg)
+	if err != nil {
+		return nil, err
+	}
+	result, err := u.m.api_request(request)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(result, &cres)
+	if err != nil {
+		return nil, err
+	}
+
+	u.m.FS.mutex.Lock()
+	defer u.m.FS.mutex.Unlock()
+	return u.m.addFSNode(cres[0].F[0])
+}
+
+// Upload a file to the filesystem
+func (m *Mega) UploadFile(srcpath string, parent *Node, name string, progress *chan int) (*Node, error) {
+	defer func() {
+		if progress != nil {
+			close(*progress)
+		}
+	}()
+
+	var infile *os.File
+	var fileSize int64
+
+	info, err := os.Stat(srcpath)
+	if err == nil {
+		fileSize = info.Size()
+	}
+
+	infile, err = os.OpenFile(srcpath, os.O_RDONLY, 0666)
+	if err != nil {
+		return nil, err
+	}
+
+	if name == "" {
+		name = filepath.Base(srcpath)
+	}
+
+	u, err := m.NewUpload(parent, name, fileSize)
+	if err != nil {
+		return nil, err
+	}
 
 	workch := make(chan int)
 	errch := make(chan error, m.ul_workers)
@@ -858,66 +1230,26 @@ func (m *Mega) UploadFile(srcpath string, parent *Node, name string, progress *c
 			defer wg.Done()
 
 			for id := range workch {
-				mutex.Lock()
-				chk_start := sorted_chunks[id]
-				chk_size := chunks[chk_start]
-				mutex.Unlock()
-				ctr_iv := bytes_to_a32(kiv)
-				ctr_iv[2] = uint32(uint64(chk_start) / 0x1000000000)
-				ctr_iv[3] = uint32(chk_start / 0x10)
-				ctr_aes := cipher.NewCTR(aes_block, a32_to_bytes(ctr_iv))
-
-				chunk := make([]byte, chk_size)
-				n, _ := infile.ReadAt(chunk, int64(chk_start))
-				chunk = chunk[:n]
-
-				enc := cipher.NewCBCEncrypter(aes_block, iv)
-
-				i := 0
-				block := make([]byte, 16)
-				paddedchunk := paddnull(chunk, 16)
-				for i = 0; i < len(paddedchunk); i += 16 {
-					copy(block[0:16], paddedchunk[i:i+16])
-					enc.CryptBlocks(block, block)
-				}
-
-				mutex.Lock()
-				if len(chunk_macs) > 0 {
-					chunk_macs[id] = make([]byte, 16)
-					copy(chunk_macs[id], block)
-				}
-				mutex.Unlock()
-
-				var rsp *http.Response
-				var err error
-				ctr_aes.XORKeyStream(chunk, chunk)
-				chk_url := fmt.Sprintf("%s/%d", uploadUrl, chk_start)
-				reader := bytes.NewBuffer(chunk)
-				req, _ := http.NewRequest("POST", chk_url, reader)
-
-				chunk_resp := []byte{}
-				for retry := 0; retry < m.retries+1; retry++ {
-					rsp, err = client.Do(req)
-					if err == nil {
-						if rsp.StatusCode == 200 {
-							break
-						} else {
-							rsp.Body.Close()
-						}
-					}
-				}
-
-				chunk_resp, err = ioutil.ReadAll(rsp.Body)
-
+				chk_start, chk_size, err := u.ChunkLocation(id)
 				if err != nil {
 					errch <- err
 					return
 				}
-				rsp.Body.Close()
-				if bytes.Equal(chunk_resp, nil) == false {
-					mutex.Lock()
-					completion_handle = chunk_resp
-					mutex.Unlock()
+				chunk := make([]byte, chk_size)
+				n, err := infile.ReadAt(chunk, chk_start)
+				if err != nil && err != io.EOF {
+					errch <- err
+					return
+				}
+				if n != len(chunk) {
+					errch <- errors.New("chunk too short")
+					return
+				}
+
+				err = u.UploadChunk(id, chunk)
+				if err != nil {
+					errch <- err
+					return
 				}
 
 				if progress != nil {
@@ -927,23 +1259,16 @@ func (m *Mega) UploadFile(srcpath string, parent *Node, name string, progress *c
 		}()
 	}
 
+	// Place chunk download jobs to chan
 	err = nil
-	if len(chunks) == 0 {
-		// File size is zero
-		// Tell single worker to request for completion handle
-		sorted_chunks = append(sorted_chunks, 0)
-		chunks[0] = 0
-		workch <- 0
-	} else {
-		// Place chunk download jobs to chan
-		for id := 0; id < len(chunks) && err == nil; {
-			select {
-			case workch <- id:
-				id++
-			case err = <-errch:
-			}
+	for id := 0; id < u.Chunks() && err == nil; {
+		select {
+		case workch <- id:
+			id++
+		case err = <-errch:
 		}
 	}
+
 	close(workch)
 
 	wg.Wait()
@@ -952,53 +1277,7 @@ func (m *Mega) UploadFile(srcpath string, parent *Node, name string, progress *c
 		return nil, err
 	}
 
-	for _, v := range chunk_macs {
-		mac_enc.CryptBlocks(mac_data, v)
-	}
-
-	t := bytes_to_a32(mac_data)
-	meta_mac := []uint32{t[0] ^ t[1], t[2] ^ t[3]}
-
-	filename := filepath.Base(srcpath)
-	if name != "" {
-		filename = name
-	}
-	attr := FileAttr{filename}
-
-	attr_data, _ := encryptAttr(kbytes, attr)
-
-	key := []uint32{ukey[0] ^ ukey[4], ukey[1] ^ ukey[5],
-		ukey[2] ^ meta_mac[0], ukey[3] ^ meta_mac[1],
-		ukey[4], ukey[5], meta_mac[0], meta_mac[1]}
-
-	buf := a32_to_bytes(key)
-	master_aes, _ := aes.NewCipher(m.k)
-	iv = a32_to_bytes([]uint32{0, 0, 0, 0})
-	enc := cipher.NewCBCEncrypter(master_aes, iv)
-	enc.CryptBlocks(buf[:16], buf[:16])
-	enc = cipher.NewCBCEncrypter(master_aes, iv)
-	enc.CryptBlocks(buf[16:], buf[16:])
-
-	cmsg[0].Cmd = "p"
-	cmsg[0].T = parenthash
-	cmsg[0].N[0].H = string(completion_handle)
-	cmsg[0].N[0].T = FILE
-	cmsg[0].N[0].A = string(attr_data)
-	cmsg[0].N[0].K = string(base64urlencode(buf))
-
-	request, _ = json.Marshal(cmsg)
-	result, err = m.api_request(request)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(result, &cres)
-	if err != nil {
-		return nil, err
-	}
-	node, err := m.addFSNode(cres[0].F[0])
-
-	return node, err
+	return u.Finish()
 }
 
 // Move a file from one location to another
@@ -1010,14 +1289,18 @@ func (m *Mega) Move(src *Node, parent *Node) error {
 		return EARGS
 	}
 	var msg [1]MoveFileMsg
+	var err error
 
 	msg[0].Cmd = "m"
 	msg[0].N = src.hash
 	msg[0].T = parent.hash
-	msg[0].I = randString(10)
+	msg[0].I, err = randString(10)
+	if err != nil {
+		return err
+	}
 
 	request, _ := json.Marshal(msg)
-	_, err := m.api_request(request)
+	_, err = m.api_request(request)
 
 	if err != nil {
 		return err
@@ -1047,16 +1330,22 @@ func (m *Mega) Rename(src *Node, name string) error {
 	attr := FileAttr{name}
 	attr_data, _ := encryptAttr(src.meta.key, attr)
 	key := make([]byte, len(src.meta.compkey))
-	blockEncrypt(master_aes, key, src.meta.compkey)
+	err := blockEncrypt(master_aes, key, src.meta.compkey)
+	if err != nil {
+		return err
+	}
 
 	msg[0].Cmd = "a"
 	msg[0].Attr = string(attr_data)
 	msg[0].Key = string(base64urlencode(key))
 	msg[0].N = src.hash
-	msg[0].I = randString(10)
+	msg[0].I, err = randString(10)
+	if err != nil {
+		return err
+	}
 
 	req, _ := json.Marshal(msg)
-	_, err := m.api_request(req)
+	_, err = m.api_request(req)
 
 	src.name = name
 
@@ -1084,7 +1373,10 @@ func (m *Mega) CreateDir(name string, parent *Node) (*Node, error) {
 	ukey := a32_to_bytes(compkey[:4])
 	attr_data, _ := encryptAttr(ukey, attr)
 	key := make([]byte, len(ukey))
-	blockEncrypt(master_aes, key, ukey)
+	err := blockEncrypt(master_aes, key, ukey)
+	if err != nil {
+		return nil, err
+	}
 
 	msg[0].Cmd = "p"
 	msg[0].T = parent.hash
@@ -1092,11 +1384,13 @@ func (m *Mega) CreateDir(name string, parent *Node) (*Node, error) {
 	msg[0].N[0].T = FOLDER
 	msg[0].N[0].A = string(attr_data)
 	msg[0].N[0].K = string(base64urlencode(key))
-	msg[0].I = randString(10)
+	msg[0].I, err = randString(10)
+	if err != nil {
+		return nil, err
+	}
 
 	req, _ := json.Marshal(msg)
 	result, err := m.api_request(req)
-
 	if err != nil {
 		return nil, err
 	}
@@ -1116,20 +1410,23 @@ func (m *Mega) Delete(node *Node, destroy bool) error {
 		return EARGS
 	}
 	if destroy == false {
-		m.Move(node, m.FS.trash)
-		return nil
+		return m.Move(node, m.FS.trash)
 	}
 
 	m.FS.mutex.Lock()
 	defer m.FS.mutex.Unlock()
 
 	var msg [1]FileDeleteMsg
+	var err error
 	msg[0].Cmd = "d"
 	msg[0].N = node.hash
-	msg[0].I = randString(10)
+	msg[0].I, err = randString(10)
+	if err != nil {
+		return err
+	}
 
 	req, _ := json.Marshal(msg)
-	_, err := m.api_request(req)
+	_, err = m.api_request(req)
 
 	parent := m.FS.lookup[node.hash]
 	parent.removeChild(node)
@@ -1138,21 +1435,80 @@ func (m *Mega) Delete(node *Node, destroy bool) error {
 	return err
 }
 
+// process an add node event
+func (m *Mega) processAddNode(evRaw []byte) error {
+	m.FS.mutex.Lock()
+	defer m.FS.mutex.Unlock()
+
+	var ev FSEvent
+	err := json.Unmarshal(evRaw, &ev)
+	if err != nil {
+		return err
+	}
+
+	for _, itm := range ev.T.Files {
+		_, err = m.addFSNode(itm)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// process an update node event
+func (m *Mega) processUpdateNode(evRaw []byte) error {
+	m.FS.mutex.Lock()
+	defer m.FS.mutex.Unlock()
+
+	var ev FSEvent
+	err := json.Unmarshal(evRaw, &ev)
+	if err != nil {
+		return err
+	}
+
+	node := m.FS.hashLookup(ev.N)
+	attr, err := decryptAttr(node.meta.key, []byte(ev.Attr))
+	if err == nil {
+		node.name = attr.Name
+	} else {
+		node.name = "BAD ATTRIBUTE"
+	}
+
+	node.ts = time.Unix(ev.Ts, 0)
+	return nil
+}
+
+// process a delete node event
+func (m *Mega) processDeleteNode(evRaw []byte) error {
+	m.FS.mutex.Lock()
+	defer m.FS.mutex.Unlock()
+
+	var ev FSEvent
+	err := json.Unmarshal(evRaw, &ev)
+	if err != nil {
+		return err
+	}
+
+	node := m.FS.hashLookup(ev.N)
+	if node != nil && node.parent != nil {
+		node.parent.removeChild(node)
+		delete(m.FS.lookup, node.hash)
+	}
+	return nil
+}
+
 // Listen for server event notifications and play actions
 func (m *Mega) pollEvents() {
-	var b []byte
-
 	for {
-		var events EventMsg
 		url := fmt.Sprintf("%s/sc?sn=%s&sid=%s", m.baseurl, m.ssn, string(m.sid))
-		resp, err := client.Post(url, "application/xml", bytes.NewBuffer(b))
+		resp, err := m.client.Post(url, "application/xml", nil)
 		if err != nil {
 			time.Sleep(time.Millisecond * 10)
 			continue
 		}
 
 		if resp.StatusCode != 200 {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			continue
 		}
 
@@ -1161,81 +1517,106 @@ func (m *Mega) pollEvents() {
 			time.Sleep(time.Millisecond * 10)
 			continue
 		}
-
-		if bytes.HasPrefix(buf, []byte("{")) == false && bytes.HasPrefix(buf, []byte("-")) == false {
-			panic("Bad response received from server - " + string(buf))
+		err = resp.Body.Close()
+		if err != nil {
+			m.logf("pollEvents: Error closing body: %v", err)
+			continue
 		}
 
-		if len(buf) < 6 {
-			var emsg [1]ErrorMsg
-			err = json.Unmarshal(buf, &emsg)
-			if err != nil {
-				err = json.Unmarshal(buf, &emsg[0])
-			}
-			if err != nil {
-				panic("Bad response received from server - " + string(buf))
-			}
-			err = parseError(emsg[0])
-			if err == EAGAIN {
-				time.Sleep(time.Millisecond * time.Duration(10))
-				continue
-			}
-
-			if err != nil {
-				panic("Bad response received from server - %s" + err.Error())
-			}
-		}
-
-		resp.Body.Close()
+		// First attempt to parse an array
+		var events Events
 		err = json.Unmarshal(buf, &events)
 		if err != nil {
-			panic("Bad response received from server - " + string(buf))
-		}
-
-		if events.W != "" {
-			rsp, err := client.Get(events.W)
+			// Try parsing as a lone error message
+			var emsg ErrorMsg
+			err = json.Unmarshal(buf, &emsg)
 			if err != nil {
-				time.Sleep(time.Millisecond * 10)
-				continue
-			}
-
-			if rsp.StatusCode != 200 {
-				rsp.Body.Close()
-				continue
-			}
-
-		} else {
-			m.FS.mutex.Lock()
-			for _, ev := range events.E {
-				switch {
-				case ev.Cmd == "t":
-					for _, itm := range ev.T.Files {
-						m.addFSNode(itm)
-					}
-				case ev.Cmd == "u":
-					node := m.FS.hashLookup(ev.N)
-					attr, err := decryptAttr(node.meta.key, []byte(ev.Attr))
-					if err == nil {
-						node.name = attr.Name
-					} else {
-						node.name = "BAD ATTRIBUTE"
-					}
-
-					node.ts = time.Unix(ev.Ts, 0)
-				case ev.Cmd == "d":
-					node := m.FS.hashLookup(ev.N)
-					if node != nil && node.parent != nil {
-						node.parent.removeChild(node)
-						delete(m.FS.lookup, node.hash)
-					}
-					/*TODO: Handle all events
-					default:
-						panic("Unknown event")
-					*/
+				m.logf("pollEvents: Bad response received from server: %s", buf)
+			} else {
+				err = parseError(emsg)
+				if err == EAGAIN {
+					time.Sleep(time.Millisecond * time.Duration(10))
+				} else if err != nil {
+					m.logf("pollEvents: Error received from server: %v", err)
 				}
 			}
-			m.ssn = events.Sn
-			m.FS.mutex.Unlock()
+			continue
+		}
+
+		// if wait URL is set, then fetch it and continue - we
+		// don't expect anything else if we have a wait URL.
+		if events.W != "" {
+			if len(events.E) > 0 {
+				m.logf("pollEvents: Unexpected event with w set: %s", buf)
+			}
+			rsp, err := m.client.Get(events.W)
+			if err != nil {
+				time.Sleep(time.Millisecond * 10)
+			} else {
+				_ = rsp.Body.Close()
+			}
+			continue
+		}
+		m.ssn = events.Sn
+
+		// For each event in the array, parse it
+		for _, evRaw := range events.E {
+			// First attempt to unmarshal as an error message
+			var emsg ErrorMsg
+			err = json.Unmarshal(evRaw, &emsg)
+			if err == nil {
+				m.logf("pollEvents: Error message received %s", evRaw)
+				err = parseError(emsg)
+				if err != nil {
+					m.logf("pollEvents: Event from server was error: %v", err)
+				}
+				continue
+			}
+
+			// Now unmarshal as a generic event
+			var gev GenericEvent
+			err = json.Unmarshal(evRaw, &gev)
+			if err != nil {
+				m.logf("pollEvents: Couldn't parse event from server: %v: %s", err, evRaw)
+				continue
+			}
+			m.debugf("pollEvents: Parsing event %q: %s", gev.Cmd, evRaw)
+
+			// Work out what to do with the event
+			var process func([]byte) error
+			switch gev.Cmd {
+			case "t": // node addition
+				process = m.processAddNode
+			case "u": // node update
+				process = m.processUpdateNode
+			case "d": // node deletion
+				process = m.processDeleteNode
+			case "s", "s2": // share addition/update/revocation
+			case "c": // contact addition/update
+			case "k": // crypto key request
+			case "fa": // file attribute update
+			case "ua": // user attribute update
+			case "psts": // account updated
+			case "ipc": // incoming pending contact request (to us)
+			case "opc": // outgoing pending contact request (from us)
+			case "upci": // incoming pending contact request update (accept/deny/ignore)
+			case "upco": // outgoing pending contact request update (from them, accept/deny/ignore)
+			case "ph": // public links handles
+			case "se": // set email
+			case "mcc": // chat creation / peer's invitation / peer's removal
+			case "mcna": // granted / revoked access to a node
+			case "uac": // user access control
+			default:
+				m.debugf("pollEvents: Unknown message %q received: %s", gev.Cmd, evRaw)
+			}
+
+			// process the event if we can
+			if process != nil {
+				err := process(evRaw)
+				if err != nil {
+					m.logf("pollEvents: Error processing event %q '%s': %v", gev.Cmd, evRaw, err)
+				}
+			}
 		}
 	}
 }
@@ -1265,7 +1646,7 @@ func (m *Mega) getLink(n *Node) (string, error) {
 
 // Exports public link for node, with or without decryption key included
 func (m *Mega) Link(n *Node, includeKey bool) (string, error) {
-	id, err := m.getLink(n);
+	id, err := m.getLink(n)
 	if err != nil {
 		return "", err
 	}
